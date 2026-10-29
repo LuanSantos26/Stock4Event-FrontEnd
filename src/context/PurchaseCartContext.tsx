@@ -16,6 +16,11 @@ import {
   CartItem,
   cartItemKey,
 } from '../services/purchaseCartStorage';
+import {
+  adicionarItem,
+  alterarQuantidade,
+  removerItem,
+} from '../utils/sacolaCarrinho';
 
 export type { CartItem };
 
@@ -33,6 +38,12 @@ interface FornecedorRef {
   nome: string;
 }
 
+export interface ResultadoAdicao {
+  adicionado: boolean;
+  /** Só vem quando `adicionado` é false: o texto a mostrar ao usuário. */
+  motivo?: string;
+}
+
 interface PurchaseCartContextValue {
   itens: CartItem[];
   gruposFornecedor: FornecedorGrupo[];
@@ -40,11 +51,12 @@ interface PurchaseCartContextValue {
   total: number;
   taxaEntregaTotal: number;
   isHydrated: boolean;
+  /** Resolve com `adicionado: false` e um `motivo` quando o item não cabe na sacola. */
   addItem: (
     produto: Produto,
     fornecedor: FornecedorRef,
     quantidade?: number,
-  ) => Promise<boolean>;
+  ) => Promise<ResultadoAdicao>;
   updateQuantity: (fornecedorId: number, produtoId: number, quantidade: number) => void;
   removeItem: (fornecedorId: number, produtoId: number) => void;
   clear: () => void;
@@ -124,84 +136,51 @@ export function PurchaseCartProvider({ children }: { children: React.ReactNode }
     void savePurchaseCart(empresaId, { itens });
   }, [empresaId, isHydrated, itens]);
 
+  /**
+   * Espelho síncrono de `itens`. O atualizador do setState roda depois, então
+   * sem isso não dá para saber na hora se o item entrou — era por isso que
+   * addItem devolvia false mesmo quando funcionava.
+   */
+  const itensRef = useRef<CartItem[]>(itens);
+  useEffect(() => {
+    itensRef.current = itens;
+  }, [itens]);
+
   const addItem = useCallback(
     async (produto: Produto, fornecedor: FornecedorRef, quantidade = 1) => {
-      let added = false;
+      const resultado = adicionarItem(
+        itensRef.current,
+        {
+          id: produto.id,
+          nome: produto.nome,
+          precoVenda: produto.precoVenda,
+          unidade: produto.unidade,
+          imagemUrl: produto.imagemUrl,
+          estoque: produto.estoque,
+        },
+        fornecedor,
+        quantidade,
+      );
 
-      setItens((prev) => {
-        const existente = prev.find(
-          (item) =>
-            item.fornecedorId === fornecedor.id && item.produtoId === produto.id,
-        );
+      if (resultado.adicionado) {
+        itensRef.current = resultado.itens;
+        setItens(resultado.itens);
+      }
 
-        const qtdFinal = (existente?.quantidade ?? 0) + quantidade;
-        const estoqueDisponivel =
-          produto.estoque != null ? Math.floor(produto.estoque) : undefined;
-
-        if (estoqueDisponivel != null && qtdFinal > estoqueDisponivel) {
-          return prev;
-        }
-
-        added = true;
-
-        if (existente) {
-          return prev.map((item) =>
-            item.fornecedorId === fornecedor.id && item.produtoId === produto.id
-              ? { ...item, quantidade: qtdFinal }
-              : item,
-          );
-        }
-
-        return [
-          ...prev,
-          {
-            produtoId: produto.id,
-            fornecedorId: fornecedor.id,
-            fornecedorNome: fornecedor.nome,
-            nome: produto.nome,
-            preco: produto.precoVenda,
-            unidade: produto.unidade,
-            quantidade,
-            imagemUrl: produto.imagemUrl,
-          },
-        ];
-      });
-
-      return added;
+      return { adicionado: resultado.adicionado, motivo: resultado.motivo };
     },
     [],
   );
 
   const updateQuantity = useCallback(
     (fornecedorId: number, produtoId: number, quantidade: number) => {
-      if (quantidade <= 0) {
-        setItens((prev) =>
-          prev.filter(
-            (item) =>
-              !(item.fornecedorId === fornecedorId && item.produtoId === produtoId),
-          ),
-        );
-        return;
-      }
-
-      setItens((prev) =>
-        prev.map((item) =>
-          item.fornecedorId === fornecedorId && item.produtoId === produtoId
-            ? { ...item, quantidade }
-            : item,
-        ),
-      );
+      setItens((prev) => alterarQuantidade(prev, fornecedorId, produtoId, quantidade));
     },
     [],
   );
 
   const removeItem = useCallback((fornecedorId: number, produtoId: number) => {
-    setItens((prev) =>
-      prev.filter(
-        (item) =>
-          !(item.fornecedorId === fornecedorId && item.produtoId === produtoId),
-      ),
-    );
+    setItens((prev) => removerItem(prev, fornecedorId, produtoId));
   }, []);
 
   const gruposFornecedor = useMemo(() => buildGruposFornecedor(itens), [itens]);

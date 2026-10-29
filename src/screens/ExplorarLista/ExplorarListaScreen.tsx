@@ -88,8 +88,12 @@ export function ExplorarListaScreen() {
 
   const adicionar = async (p: ProdutoExplorar) => {
     if (p.proprio || normalizarEstoque(p.estoque) <= 0) return;
-    const ok = await addItem(p, { id: p.empresaId, nome: p.fornecedorNome });
-    setAviso(ok ? `${p.nome} adicionado ao carrinho.` : 'Não foi possível adicionar ao carrinho.');
+    const { adicionado, motivo } = await addItem(p, { id: p.empresaId, nome: p.fornecedorNome });
+    setAviso(
+      adicionado
+        ? `${p.nome} adicionado à sacola.`
+        : motivo ?? 'Não foi possível adicionar à sacola.',
+    );
   };
 
   const abrirLoja = (l: Fornecedor) => navigation.navigate('StoreVitrine', {

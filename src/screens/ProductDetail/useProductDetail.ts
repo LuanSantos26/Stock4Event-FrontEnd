@@ -124,7 +124,7 @@ export function useProductDetail() {
     setAdding(true);
     setFeedback('');
 
-    const ok = await addItem(
+    const { adicionado, motivo } = await addItem(
       {
         id: produtoId,
         empresaId: fornecedorId,
@@ -142,11 +142,11 @@ export function useProductDetail() {
 
     setAdding(false);
 
-    if (ok) {
-      setFeedback('Produto adicionado ao carrinho!');
-    } else {
-      setFeedback('Quantidade indisponível em estoque.');
-    }
+    setFeedback(
+      adicionado
+        ? 'Produto adicionado à sacola!'
+        : motivo ?? 'Quantidade indisponível em estoque.',
+    );
   };
 
   return {

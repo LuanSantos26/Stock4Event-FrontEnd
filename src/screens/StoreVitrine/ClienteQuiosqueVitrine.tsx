@@ -75,6 +75,18 @@ export function ClienteQuiosqueVitrine({
   const tabBarHeight = useBottomTabBarHeight();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [categoria, setCategoria] = useState('todas');
+  const [aviso, setAviso] = useState('');
+
+  /** Antes o item entrava na sacola sem nenhum retorno na tela. */
+  const adicionarProduto = async (produto: Produto) => {
+    const { adicionado, motivo } = await addItem(produto, {
+      id: fornecedorId,
+      nome: fornecedorNome,
+    });
+    setAviso(
+      adicionado ? `${produto.nome} adicionado à sacola.` : motivo ?? 'Não foi possível adicionar.',
+    );
+  };
 
   const chips = useMemo(() => {
     const extras = CATEGORIAS.filter((cat) => {
@@ -193,6 +205,7 @@ export function ClienteQuiosqueVitrine({
           </View>
 
           <Text style={styles.sectionTitle}>Bebidas disponíveis</Text>
+          {aviso ? <Text style={styles.avisoSacola}>{aviso}</Text> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
             {chips.map((chip) => {
               const active = categoria === chip.id;
@@ -243,9 +256,7 @@ export function ClienteQuiosqueVitrine({
                       <TouchableOpacity
                         style={[styles.addButton, !emEstoque && { opacity: 0.4 }]}
                         disabled={!emEstoque}
-                        onPress={() =>
-                          void addItem(produto, { id: fornecedorId, nome: fornecedorNome })
-                        }
+                        onPress={() => void adicionarProduto(produto)}
                       >
                         <Ionicons name="add" size={14} color="#FFF" />
                       </TouchableOpacity>

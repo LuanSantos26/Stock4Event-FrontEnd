@@ -82,9 +82,12 @@ export function CheckoutPaymentModal({
   const [erro, setErro] = useState('');
   const [cartaoFormVisible, setCartaoFormVisible] = useState(false);
 
+  const [falhouCarregar, setFalhouCarregar] = useState(false);
+
   const carregar = useCallback(async () => {
     setLoading(true);
     setErro('');
+    setFalhouCarregar(false);
     try {
       if (metodo === 'pix') {
         const chaves = await garantirChaveCnpjInicial(empresaId, cnpjEmpresa);
@@ -95,6 +98,15 @@ export function CheckoutPaymentModal({
         setCartoes(lista);
         setCartaoSelecionado(lista[0] ?? null);
       }
+    } catch (err) {
+      // Sem isto, uma falha de rede deixava a lista vazia e o usuário via
+      // "Cadastre uma chave PIX" mesmo tendo uma cadastrada.
+      setFalhouCarregar(true);
+      setErro(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Não foi possível carregar suas formas de pagamento. Toque para tentar de novo.',
+      );
     } finally {
       setLoading(false);
     }
@@ -115,6 +127,12 @@ export function CheckoutPaymentModal({
 
   const handleConfirm = () => {
     setErro('');
+
+    // Lista vazia por falha de rede não é o mesmo que não ter cadastro.
+    if (falhouCarregar) {
+      setErro('Não deu para conferir suas formas de pagamento. Tente de novo.');
+      return;
+    }
 
     if (metodo === 'pix') {
       if (!pixSelecionado) {
@@ -254,6 +272,11 @@ export function CheckoutPaymentModal({
             )}
 
             {erro ? <Text style={styles.erro}>{erro}</Text> : null}
+            {falhouCarregar && !loading ? (
+              <TouchableOpacity onPress={carregar}>
+                <Text style={styles.tentarNovamente}>Tocar para tentar de novo</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <View style={styles.actions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
@@ -433,6 +456,13 @@ const styles = StyleSheet.create({
   erro: {
     color: '#C62828',
     fontSize: 13,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  tentarNovamente: {
+    color: '#FFAD19',
+    fontSize: 13,
+    fontWeight: '700',
     marginBottom: 8,
     textAlign: 'center',
   },

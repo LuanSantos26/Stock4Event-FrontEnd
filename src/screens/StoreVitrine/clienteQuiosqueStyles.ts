@@ -148,6 +148,12 @@ export const clienteQuiosqueStyles = StyleSheet.create({
     color: '#1F2937',
     marginBottom: 10,
   },
+  avisoSacola: {
+    color: '#1F7A3A',
+    fontWeight: '700',
+    fontSize: 13,
+    marginBottom: 10,
+  },
   chipsRow: {
     flexDirection: 'row',
     gap: 8,
