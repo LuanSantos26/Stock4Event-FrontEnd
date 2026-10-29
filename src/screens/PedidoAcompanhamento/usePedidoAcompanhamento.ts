@@ -79,7 +79,8 @@ export function usePedidoAcompanhamento() {
 
   const { confirm } = useConfirmDialog();
   const [cancelando, setCancelando] = useState(false);
-  const podeCancelar = pedido?.status === 'aguardando_liberacao';
+  // O comprador só cancela antes de o pedido sair para a entrega.
+  const podeCancelar = pedido?.status === 'recebido' || pedido?.status === 'preparando';
 
   // Diálogo do próprio app: o Alert.alert com botões não aparece no navegador (Expo web).
   const confirmarCancelamento = useCallback(() => {

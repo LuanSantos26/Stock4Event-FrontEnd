@@ -75,6 +75,8 @@ export function obterPrevisaoEntrega(pedido: SolicitacaoCompra): string {
   switch (pedido.status) {
     case 'entregue':
       return 'Pedido entregue';
+    case 'cancelada':
+      return 'Pedido cancelado';
     case 'em_rota':
       return 'Chegada em até 15 min';
     default:
@@ -85,9 +87,11 @@ export function obterPrevisaoEntrega(pedido: SolicitacaoCompra): string {
 export function calcularProgressoPedido(pedido: SolicitacaoCompra): number {
   const etapas = pedido.etapas ?? [];
   if (etapas.length === 0) {
+    // Sem as etapas do servidor, estima pelo status (4 etapas = 0,25 cada).
     if (pedido.status === 'entregue') return 1;
     if (pedido.status === 'em_rota') return 0.75;
-    return 0.35;
+    if (pedido.status === 'preparando') return 0.5;
+    return 0.25;
   }
   const concluidas = etapas.filter((e) => e.concluida).length;
   return Math.min(1, concluidas / etapas.length);
@@ -149,7 +153,8 @@ export async function listarSolicitacoesRecebidas(
   return lista.map(normalizeSolicitacao);
 }
 
-export type StatusPedidoFornecedor = 'em_rota' | 'entregue' | 'cancelada';
+/** Etapas que o fornecedor aciona à mão, na ordem, mais o cancelamento. */
+export type StatusPedidoFornecedor = 'preparando' | 'em_rota' | 'entregue' | 'cancelada';
 
 export async function atualizarStatusSolicitacao(
   pedidoId: number,
@@ -189,12 +194,14 @@ export async function cancelarSolicitacao(
 
 export function labelStatusPedido(status: string): string {
   switch (status) {
-    case 'aguardando_liberacao':
-      return 'Aguardando liberação da distribuidora';
+    case 'recebido':
+      return 'Pedido recebido';
+    case 'preparando':
+      return 'Preparando pedido';
     case 'em_rota':
-      return 'Saindo para rota de entrega';
+      return 'Pedido saiu para a entrega';
     case 'entregue':
-      return 'Pedido entregue';
+      return 'Entregue';
     case 'cancelada':
       return 'Pedido cancelado';
     default:

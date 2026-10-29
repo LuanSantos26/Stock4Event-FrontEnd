@@ -24,17 +24,17 @@ import { BrandLogo } from '../../components/brand/BrandLogo';
 const PRIMARY = CLIENTE_COLORS.primary;
 
 const STEP_LABELS: Record<string, string> = {
-  pedido_efetuado: 'Pedido confirmado',
-  aguardando_liberacao: 'Em separação',
-  em_rota: 'A caminho',
+  recebido: 'Pedido recebido',
+  preparando: 'Preparando pedido',
+  em_rota: 'Saiu para a entrega',
   entregue: 'Entregue',
 };
 
 function stepIcon(codigo: string): keyof typeof Ionicons.glyphMap {
   switch (codigo) {
-    case 'pedido_efetuado':
+    case 'recebido':
       return 'checkmark';
-    case 'aguardando_liberacao':
+    case 'preparando':
       return 'cube-outline';
     case 'em_rota':
       return 'car-outline';

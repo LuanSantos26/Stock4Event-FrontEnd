@@ -23,7 +23,17 @@ import {
 } from '../../services/marketplaceService';
 import { formatarPreco } from '../../services/productService';
 
-const STATUS_ANDAMENTO = ['aguardando_liberacao', 'em_rota'];
+const STATUS_ANDAMENTO = ['recebido', 'preparando', 'em_rota'];
+
+/**
+ * Próxima etapa que o fornecedor aciona à mão, e o texto do botão.
+ * 'entregue' e 'cancelada' encerram o pedido, então não têm sucessor.
+ */
+const PROXIMA_ETAPA: Record<string, { status: StatusPedidoFornecedor; label: string }> = {
+  recebido: { status: 'preparando', label: 'Preparar pedido' },
+  preparando: { status: 'em_rota', label: 'Despachar' },
+  em_rota: { status: 'entregue', label: 'Confirmar entrega' },
+};
 
 function mesmoDia(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -41,6 +51,7 @@ function formatarHora(value: string): string {
 
 function estiloStatus(status: string) {
   switch (status) {
+    case 'preparando':
     case 'em_rota':
       return { pill: styles.statusPillRota, text: styles.statusTextRota };
     case 'entregue':
@@ -125,10 +136,8 @@ export function EmpresaVendasScreen() {
     if (atualizandoId === pedido.id) {
       return <ActivityIndicator style={styles.actionLoader} />;
     }
-    const proximo: { status: StatusPedidoFornecedor; label: string } =
-      pedido.status === 'aguardando_liberacao'
-        ? { status: 'em_rota', label: 'Despachar' }
-        : { status: 'entregue', label: 'Confirmar entrega' };
+    const proximo = PROXIMA_ETAPA[pedido.status];
+    if (!proximo) return null;
     return (
       <View style={styles.actionRow}>
         <TouchableOpacity style={styles.actionPrimary} onPress={() => mudarStatus(pedido, proximo.status)}>

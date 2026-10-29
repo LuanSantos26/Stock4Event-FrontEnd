@@ -15,12 +15,14 @@ export function codigoPedido(id: number): string {
 
 export function chipStatus(status: string): { label: string; tone: 'blue' | 'gold' | 'green' | 'gray' } {
   switch (status) {
-    case 'aguardando_liberacao':
-      return { label: 'Em separação', tone: 'blue' };
+    case 'recebido':
+      return { label: 'Pedido recebido', tone: 'blue' };
+    case 'preparando':
+      return { label: 'Preparando pedido', tone: 'blue' };
     case 'em_rota':
-      return { label: 'A caminho', tone: 'gold' };
+      return { label: 'Saiu para a entrega', tone: 'gold' };
     case 'entregue':
-      return { label: 'Concluído', tone: 'green' };
+      return { label: 'Entregue', tone: 'green' };
     case 'cancelada':
       return { label: 'Cancelado', tone: 'gray' };
     default:

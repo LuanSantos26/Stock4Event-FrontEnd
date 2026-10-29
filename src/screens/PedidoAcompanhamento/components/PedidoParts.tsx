@@ -10,18 +10,19 @@ export const SUCCESS = '#2E7D32';
 export const SUCCESS_LIGHT = '#E8F5E9';
 export const POLL_INTERVAL_MS = 5000;
 
+/** Fallback só para o primeiro render; o backend manda as etapas de verdade. */
 export const ETAPAS_PADRAO: EtapaPedido[] = [
-  { codigo: 'pedido_efetuado', label: 'Pedido confirmado', ordem: 1, concluida: true, ativa: false },
-  { codigo: 'aguardando_liberacao', label: 'Preparando pedido', ordem: 2, concluida: false, ativa: true },
-  { codigo: 'em_rota', label: 'Saiu para entrega', ordem: 3, concluida: false, ativa: false },
-  { codigo: 'entregue', label: 'Pedido entregue', ordem: 4, concluida: false, ativa: false },
+  { codigo: 'recebido', label: 'Pedido recebido', ordem: 1, concluida: false, ativa: true },
+  { codigo: 'preparando', label: 'Preparando pedido', ordem: 2, concluida: false, ativa: false },
+  { codigo: 'em_rota', label: 'Pedido saiu para a entrega', ordem: 3, concluida: false, ativa: false },
+  { codigo: 'entregue', label: 'Entregue', ordem: 4, concluida: false, ativa: false },
 ];
 
 function iconeEtapa(codigo: string): keyof typeof Ionicons.glyphMap {
   switch (codigo) {
-    case 'pedido_efetuado':
+    case 'recebido':
       return 'receipt-outline';
-    case 'aguardando_liberacao':
+    case 'preparando':
       return 'cube-outline';
     case 'em_rota':
       return 'bicycle-outline';
@@ -34,7 +35,9 @@ function iconeEtapa(codigo: string): keyof typeof Ionicons.glyphMap {
 
 function hintEtapa(codigo: string): string {
   switch (codigo) {
-    case 'aguardando_liberacao':
+    case 'recebido':
+      return 'A distribuidora recebeu seu pedido.';
+    case 'preparando':
       return 'A distribuidora está separando seus produtos.';
     case 'em_rota':
       return 'O entregador está a caminho do seu endereço.';
