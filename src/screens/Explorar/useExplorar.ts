@@ -88,7 +88,7 @@ export function useExplorar() {
       // Produtos cadastrados pelas contas fornecedoras (exceto a própria), mais recentes primeiro.
       const [listaLojas, recentes] = await Promise.all([
         listarFornecedores(empresaId),
-        listarProdutosRecentes(60).catch(() => [] as ProdutoExplorar[]),
+        listarProdutosRecentes(0).catch(() => [] as ProdutoExplorar[]),
       ]);
       setLojas(listaLojas);
       setProdutos(recentes);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -20,14 +20,14 @@ import {
   resolverEnderecoInicial,
   salvarEnderecoSelecionado,
 } from '../../services/enderecoService';
-import { CheckoutPaymentResult } from '../../components/Card/CheckoutPaymentModal';
+import { CheckoutPaymentResult, RecebedorCheckout } from '../../components/Card/CheckoutPaymentModal';
 import { useTabBarScrollPadding } from '../../components/layout/BottomTabBar';
 
+/** Opções do checkout. "Cartão" abre a escolha entre crédito e débito no modal de pagamento. */
 export const METODOS_PADRAO: { id: MetodoPagamento; label: string }[] = [
-  { id: 'pix', label: 'PIX' },
-  { id: 'credito', label: 'Crédito' },
-  { id: 'debito', label: 'Débito' },
-  { id: 'dinheiro', label: 'Dinheiro' },
+  { id: 'pix', label: 'Pix' },
+  { id: 'credito', label: 'Cartão' },
+  { id: 'boleto', label: 'Boleto' },
 ];
 
 export function useSacola() {
@@ -190,8 +190,10 @@ export function useSacola() {
             metodoPagamento: pagamento.metodoPagamento,
             enderecoEntregaId: enderecoSelecionado.id,
             taxaEntrega: TAXA_ENTREGA,
-            pagamentoReferencia: pagamento.pagamentoReferencia,
-            pagamentoDetalhes: pagamento.pagamentoDetalhes,
+            pagamentoReferencia:
+              pagamento.porFornecedor?.[grupo.fornecedorId]?.pagamentoReferencia ?? pagamento.pagamentoReferencia,
+            pagamentoDetalhes:
+              pagamento.porFornecedor?.[grupo.fornecedorId]?.pagamentoDetalhes ?? pagamento.pagamentoDetalhes,
             itens: grupo.itens.map((item) => ({
               produtoId: item.produtoId,
               quantidade: item.quantidade,
@@ -226,6 +228,16 @@ export function useSacola() {
   };
 
   const totalComTaxa = total + (itemCount > 0 ? taxaEntregaTotal : 0);
+  // Cada fornecedor recebe o próprio subtotal mais a taxa de entrega do pedido dele.
+  const recebedores = useMemo<RecebedorCheckout[]>(
+    () =>
+      gruposFornecedor.map((g) => ({
+        fornecedorId: g.fornecedorId,
+        fornecedorNome: g.fornecedorNome,
+        valor: g.subtotal + TAXA_ENTREGA,
+      })),
+    [gruposFornecedor],
+  );
   const sacolaVazia = itemCount === 0;
   const pedidoCount = gruposFornecedor.length;
   const taxaEntregaLabel =
@@ -237,6 +249,7 @@ export function useSacola() {
     scrollBottomPaddingWithFooter,
     user,
     gruposFornecedor,
+    recebedores,
     itemCount,
     total,
     taxaEntregaTotal,

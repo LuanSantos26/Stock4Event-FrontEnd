@@ -61,7 +61,7 @@ export function ExplorarListaScreen() {
     pull ? setAtualizando(true) : setCarregando(true);
     setErro('');
     try {
-      if (tipo === 'produtos') setProdutos(await listarProdutosRecentes(60));
+      if (tipo === 'produtos') setProdutos(await listarProdutosRecentes(0));
       else setLojas(await listarFornecedores(empresaId));
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Não foi possível carregar a lista.');

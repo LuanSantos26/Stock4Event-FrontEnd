@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { BackButton } from '../../components/Header/BackButton';
@@ -19,7 +20,7 @@ import { useHeaderTopPadding } from '../../utils/safeArea';
 import { atualizarEmpresa, atualizarUsuario } from '../../services/authService';
 import { formatarCnpjInput, formatarTelefoneInput, normalizarDocumento } from '../../utils/pixUtils';
 import { clienteStyles, styles } from './styles';
-import { CLIENTE_COLORS } from '../../theme/theme';
+import { CLIENTE_COLORS, COMPANY_COLORS } from '../../theme/theme';
 import { BrandLogo } from '../../components/brand/BrandLogo';
 
 const PRIMARY = CLIENTE_COLORS.primary;
@@ -63,6 +64,7 @@ function IconField({
 
 export function ConfiguracoesScreen() {
   const { user, updateUser, perfilUso } = useAuth();
+  const navigation = useNavigation<any>();
   const isCliente = perfilUso === 'Cliente';
   const goBack = useAppGoBack(isCliente ? 'Perfil' : 'Home');
   const topPadding = useHeaderTopPadding(8);
@@ -319,6 +321,19 @@ export function ConfiguracoesScreen() {
         />
 
         <AlternarPerfilCard />
+
+        <TouchableOpacity
+          style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}
+          onPress={() => navigation.navigate('DadosBancarios')}
+          accessibilityRole="button"
+        >
+          <Ionicons name="business-outline" size={22} color={COMPANY_COLORS.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>Dados bancários</Text>
+            <Text style={styles.sectionSubtitle}>Conta e chave Pix onde você recebe os pagamentos dos pedidos</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={COMPANY_COLORS.primary} />
+        </TouchableOpacity>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Dados pessoais</Text>

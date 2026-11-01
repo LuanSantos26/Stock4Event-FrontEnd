@@ -16,6 +16,7 @@ export type RootStackParamList = {
   Quiosque: undefined;
   Configuracoes: undefined;
   FormasPagamento: undefined;
+  DadosBancarios: undefined;
   Enderecos: undefined;
   AddItem: undefined;
   Cart: { solicitacaoEnviada?: boolean; mensagemSucesso?: string } | undefined;

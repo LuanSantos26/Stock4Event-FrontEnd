@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
-  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MetodoPagamento } from '../../services/marketplaceService';
@@ -19,17 +18,40 @@ import {
   listarCartoesPorTipo,
 } from '../../services/cartaoPagamentoService';
 import { formatarCartaoExibicao } from '../../utils/cartaoUtils';
+import { iconeTipoPagamento } from '../../services/formaPagamentoService';
 import {
-  PixSalvo,
-  garantirChaveCnpjInicial,
-} from '../../services/pixChaveService';
-import { labelTipoPagamento, iconeTipoPagamento } from '../../services/formaPagamentoService';
+  DadosBancarios,
+  buscarDadosBancarios,
+  documentoMascarado,
+  resumoConta,
+} from '../../services/dadosBancariosService';
+import {
+  formatarData,
+  gerarBoleto,
+  gerarPixCopiaECola,
+  vencimentoPadrao,
+} from '../../utils/pagamentoSimulado';
 import { CartaoFormModal } from './CartaoFormModal';
+
+/** Dados de pagamento de um pedido (um pedido por fornecedor). */
+export interface PagamentoFornecedor {
+  pagamentoReferencia?: string;
+  pagamentoDetalhes?: string;
+}
 
 export interface CheckoutPaymentResult {
   metodoPagamento: MetodoPagamento;
   pagamentoReferencia?: string;
   pagamentoDetalhes?: string;
+  /** Referência específica de cada fornecedor (linha do boleto, Pix copia e cola). */
+  porFornecedor?: Record<number, PagamentoFornecedor>;
+}
+
+/** Quem recebe e quanto: um item por fornecedor do carrinho (subtotal + entrega). */
+export interface RecebedorCheckout {
+  fornecedorId: number;
+  fornecedorNome: string;
+  valor: number;
 }
 
 interface CheckoutPaymentModalProps {
@@ -37,30 +59,31 @@ interface CheckoutPaymentModalProps {
   total: number;
   metodoInicial: MetodoPagamento;
   empresaId: number;
+  /** Mantido por compatibilidade; o Pix agora usa a chave do fornecedor. */
   cnpjEmpresa?: string;
   enderecoResumo?: string;
+  recebedores?: RecebedorCheckout[];
   onClose: () => void;
   onConfirm: (result: CheckoutPaymentResult) => void;
 }
 
-const METODOS: MetodoPagamento[] = ['pix', 'credito', 'debito', 'dinheiro'];
+type OpcaoCheckout = 'pix' | 'cartao' | 'boleto';
 
-const PIX_QR_CODE = require('../../../assets/pix-qrcode.png');
+const OPCOES: { id: OpcaoCheckout; label: string; icone: MetodoPagamento }[] = [
+  { id: 'pix', label: 'Pix', icone: 'pix' },
+  { id: 'cartao', label: 'Cartão', icone: 'credito' },
+  { id: 'boleto', label: 'Boleto', icone: 'boleto' },
+];
 
-function PixQrCode() {
-  return (
-    <View style={styles.qrWrap}>
-      <View style={styles.qrBox}>
-        <Image
-          source={PIX_QR_CODE}
-          style={styles.qrImage}
-          resizeMode="contain"
-          accessibilityLabel="QR Code PIX para pagamento"
-        />
-      </View>
-      <Text style={styles.qrHint}>Escaneie o QR Code para pagar via PIX</Text>
-    </View>
-  );
+function opcaoDoMetodo(metodo: MetodoPagamento): OpcaoCheckout {
+  if (metodo === 'boleto') return 'boleto';
+  if (metodo === 'credito' || metodo === 'debito') return 'cartao';
+  return 'pix';
+}
+
+/** Mesmo número para o mesmo fornecedor e valor durante a sessão do modal. */
+function nossoNumero(fornecedorId: number, sessao: number): string {
+  return `${sessao}${String(fornecedorId).padStart(4, '0')}`;
 }
 
 export function CheckoutPaymentModal({
@@ -68,54 +91,60 @@ export function CheckoutPaymentModal({
   total,
   metodoInicial,
   empresaId,
-  cnpjEmpresa,
   enderecoResumo,
+  recebedores = [],
   onClose,
   onConfirm,
 }: CheckoutPaymentModalProps) {
-  const [metodo, setMetodo] = useState<MetodoPagamento>(metodoInicial);
+  const [opcao, setOpcao] = useState<OpcaoCheckout>(opcaoDoMetodo(metodoInicial));
+  const [tipoCartao, setTipoCartao] = useState<'credito' | 'debito'>(
+    metodoInicial === 'debito' ? 'debito' : 'credito',
+  );
   const [cartoes, setCartoes] = useState<CartaoSalvo[]>([]);
-  const [chavesPix, setChavesPix] = useState<PixSalvo[]>([]);
   const [cartaoSelecionado, setCartaoSelecionado] = useState<CartaoSalvo | null>(null);
-  const [pixSelecionado, setPixSelecionado] = useState<PixSalvo | null>(null);
+  const [contas, setContas] = useState<Record<number, DadosBancarios | null>>({});
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
-  const [cartaoFormVisible, setCartaoFormVisible] = useState(false);
-
   const [falhouCarregar, setFalhouCarregar] = useState(false);
+  const [cartaoFormVisible, setCartaoFormVisible] = useState(false);
+  const [sessao, setSessao] = useState(() => Date.now() % 100000);
+
+  const idsRecebedores = recebedores.map((r) => r.fornecedorId).join(',');
 
   const carregar = useCallback(async () => {
     setLoading(true);
     setErro('');
     setFalhouCarregar(false);
     try {
-      if (metodo === 'pix') {
-        const chaves = await garantirChaveCnpjInicial(empresaId, cnpjEmpresa);
-        setChavesPix(chaves);
-        setPixSelecionado(chaves[0] ?? null);
-      } else if (metodo === 'credito' || metodo === 'debito') {
-        const lista = await listarCartoesPorTipo(empresaId, metodo);
+      const pares = await Promise.all(
+        recebedores.map(async (r) => [r.fornecedorId, await buscarDadosBancarios(r.fornecedorId)] as const),
+      );
+      setContas(Object.fromEntries(pares));
+      if (opcao === 'cartao') {
+        const lista = await listarCartoesPorTipo(empresaId, tipoCartao);
         setCartoes(lista);
         setCartaoSelecionado(lista[0] ?? null);
       }
     } catch (err) {
-      // Sem isto, uma falha de rede deixava a lista vazia e o usuário via
-      // "Cadastre uma chave PIX" mesmo tendo uma cadastrada.
       setFalhouCarregar(true);
       setErro(
         err instanceof Error && err.message
           ? err.message
-          : 'Não foi possível carregar suas formas de pagamento. Toque para tentar de novo.',
+          : 'Não foi possível carregar os dados de pagamento. Toque para tentar de novo.',
       );
     } finally {
       setLoading(false);
     }
-  }, [empresaId, cnpjEmpresa, metodo]);
+    // idsRecebedores representa a lista de recebedores sem recriar a função a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, opcao, tipoCartao, idsRecebedores]);
 
   useEffect(() => {
     if (visible) {
-      setMetodo(metodoInicial);
+      setOpcao(opcaoDoMetodo(metodoInicial));
+      if (metodoInicial === 'debito') setTipoCartao('debito');
       setErro('');
+      setSessao(Date.now() % 100000);
     }
   }, [visible, metodoInicial]);
 
@@ -123,56 +152,108 @@ export function CheckoutPaymentModal({
     if (visible) {
       carregar();
     }
-  }, [visible, metodo, carregar]);
+  }, [visible, carregar]);
+
+  const vencimento = useMemo(() => vencimentoPadrao(), [sessao]);
+
+  // Pix copia e cola e boleto de cada fornecedor (só para quem cadastrou a conta).
+  const cobrancas = useMemo(
+    () =>
+      recebedores.map((r) => {
+        const conta = contas[r.fornecedorId] ?? null;
+        const id = nossoNumero(r.fornecedorId, sessao);
+        const pix = conta?.chavePix
+          ? gerarPixCopiaECola({
+              chave: conta.chavePix,
+              tipoChave: conta.tipoChavePix,
+              nomeRecebedor: conta.titular,
+              valor: r.valor,
+              txid: `S4E${id}`,
+            })
+          : null;
+        const boleto = conta
+          ? gerarBoleto({
+              bancoCodigo: conta.bancoCodigo,
+              agencia: conta.agencia,
+              conta: conta.conta,
+              valor: r.valor,
+              vencimento,
+              nossoNumero: id,
+            })
+          : null;
+        return { recebedor: r, conta, pix, boleto };
+      }),
+    [recebedores, contas, sessao, vencimento],
+  );
 
   const handleConfirm = () => {
     setErro('');
 
-    // Lista vazia por falha de rede não é o mesmo que não ter cadastro.
     if (falhouCarregar) {
-      setErro('Não deu para conferir suas formas de pagamento. Tente de novo.');
+      setErro('Não deu para carregar os dados de pagamento. Tente de novo.');
       return;
     }
 
-    if (metodo === 'pix') {
-      if (!pixSelecionado) {
-        setErro('Cadastre uma chave PIX em Formas de pagamento.');
-        return;
-      }
-      onConfirm({
-        metodoPagamento: 'pix',
-        pagamentoReferencia: `PIX ${pixSelecionado.chaveMascarada}`,
-        pagamentoDetalhes: `${pixSelecionado.apelido} (${pixSelecionado.tipoChave})`,
-      });
-      return;
-    }
-
-    if (metodo === 'credito' || metodo === 'debito') {
+    if (opcao === 'cartao') {
       if (!cartaoSelecionado) {
-        setErro(`Cadastre um cartão de ${metodo === 'credito' ? 'crédito' : 'débito'}.`);
+        setErro(`Cadastre um cartão de ${tipoCartao === 'credito' ? 'crédito' : 'débito'}.`);
         return;
       }
       onConfirm({
-        metodoPagamento: metodo,
+        metodoPagamento: tipoCartao,
         pagamentoReferencia: formatarCartaoExibicao(cartaoSelecionado.ultimosDigitos),
         pagamentoDetalhes: `${labelCartao(cartaoSelecionado)} · ${cartaoSelecionado.titular}`,
       });
       return;
     }
 
-    onConfirm({
-      metodoPagamento: 'dinheiro',
-      pagamentoReferencia: 'Pagamento na entrega',
-      pagamentoDetalhes: 'Dinheiro — conferir troco com entregador',
-    });
+    const semConta = cobrancas.filter((c) =>
+      opcao === 'pix' ? !c.pix : !c.boleto,
+    );
+    if (semConta.length > 0) {
+      const nomes = semConta.map((c) => c.recebedor.fornecedorNome).join(', ');
+      setErro(
+        opcao === 'pix'
+          ? `${nomes} ainda não cadastrou chave Pix. Escolha cartão ou boleto.`
+          : `${nomes} ainda não cadastrou dados bancários. Escolha cartão ou Pix.`,
+      );
+      return;
+    }
+
+    const porFornecedor: Record<number, PagamentoFornecedor> = {};
+    for (const c of cobrancas) {
+      porFornecedor[c.recebedor.fornecedorId] =
+        opcao === 'pix'
+          ? {
+              pagamentoReferencia: `PIX ${c.conta?.chavePix ?? ''}`.trim(),
+              pagamentoDetalhes: `Pix copia e cola: ${c.pix}`,
+            }
+          : {
+              pagamentoReferencia: c.boleto?.linhaDigitavel,
+              pagamentoDetalhes: `Boleto ${c.conta?.bancoNome} · vence ${formatarData(vencimento)}`,
+            };
+    }
+    onConfirm({ metodoPagamento: opcao, porFornecedor });
   };
+
+  const renderConta = (conta: DadosBancarios | null) =>
+    conta ? (
+      <>
+        <Text style={styles.contaLinha}>{resumoConta(conta)}</Text>
+        <Text style={styles.contaLinha}>
+          Titular: {conta.titular} · {documentoMascarado(conta.documento)}
+        </Text>
+      </>
+    ) : (
+      <Text style={styles.semConta}>Fornecedor ainda não cadastrou dados bancários.</Text>
+    );
 
   return (
     <>
       <Modal visible={visible && !cartaoFormVisible} transparent animationType="slide" onRequestClose={onClose}>
         <Pressable style={styles.overlay} onPress={onClose}>
           <Pressable style={styles.content} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.title}>Confirmar pagamento</Text>
+            <Text style={styles.title}>Como você quer pagar?</Text>
             <Text style={styles.total}>{formatarPreco(total)}</Text>
 
             {enderecoResumo ? (
@@ -184,92 +265,138 @@ export function CheckoutPaymentModal({
               </View>
             ) : null}
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.metodoScroll}>
-              {METODOS.map((item) => {
-                const selected = metodo === item;
+            <View style={styles.opcoesRow}>
+              {OPCOES.map((item) => {
+                const selected = opcao === item.id;
                 return (
                   <TouchableOpacity
-                    key={item}
-                    style={[styles.metodoChip, selected && styles.metodoChipSelected]}
-                    onPress={() => setMetodo(item)}
+                    key={item.id}
+                    style={[styles.metodoChip, styles.opcaoChip, selected && styles.metodoChipSelected]}
+                    onPress={() => setOpcao(item.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
                   >
                     <Ionicons
-                      name={iconeTipoPagamento(item)}
+                      name={iconeTipoPagamento(item.icone)}
                       size={16}
                       color={selected ? '#FFF' : '#FFAD19'}
                     />
                     <Text style={[styles.metodoChipText, selected && styles.metodoChipTextSelected]}>
-                      {labelTipoPagamento(item)}
+                      {item.label}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
-            </ScrollView>
+            </View>
 
-            {loading ? (
-              <ActivityIndicator color="#FFAD19" style={{ marginVertical: 20 }} />
-            ) : metodo === 'pix' ? (
-              <View style={styles.panel}>
-                <PixQrCode />
-                {chavesPix.map((chave) => {
-                  const selected = pixSelecionado?.id === chave.id;
-                  return (
-                    <TouchableOpacity
-                      key={chave.id}
-                      style={[styles.optionRow, selected && styles.optionRowSelected]}
-                      onPress={() => setPixSelecionado(chave)}
-                    >
-                      <Ionicons name="phone-portrait-outline" size={18} color="#FFAD19" />
-                      <View style={styles.optionInfo}>
-                        <Text style={styles.optionTitle}>{chave.apelido}</Text>
-                        <Text style={styles.optionSub}>{chave.chaveMascarada}</Text>
-                      </View>
-                      {selected ? <Ionicons name="checkmark-circle" size={20} color="#FFAD19" /> : null}
+            <ScrollView style={styles.corpo} contentContainerStyle={{ paddingBottom: 4 }}>
+              {loading ? (
+                <ActivityIndicator color="#FFAD19" style={{ marginVertical: 20 }} />
+              ) : opcao === 'cartao' ? (
+                <View style={styles.panel}>
+                  <View style={styles.tipoCartaoRow}>
+                    {(['credito', 'debito'] as const).map((tipo) => {
+                      const selected = tipoCartao === tipo;
+                      return (
+                        <TouchableOpacity
+                          key={tipo}
+                          style={[styles.tipoCartaoBtn, selected && styles.tipoCartaoBtnSelected]}
+                          onPress={() => setTipoCartao(tipo)}
+                        >
+                          <Text style={[styles.tipoCartaoText, selected && styles.tipoCartaoTextSelected]}>
+                            {tipo === 'credito' ? 'Crédito' : 'Débito'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {cartoes.length === 0 ? (
+                    <TouchableOpacity style={styles.addCardBtn} onPress={() => setCartaoFormVisible(true)}>
+                      <Ionicons name="add-circle-outline" size={20} color="#FFAD19" />
+                      <Text style={styles.addCardText}>
+                        Cadastrar cartão de {tipoCartao === 'credito' ? 'crédito' : 'débito'}
+                      </Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-            ) : metodo === 'credito' || metodo === 'debito' ? (
-              <View style={styles.panel}>
-                {cartoes.length === 0 ? (
-                  <TouchableOpacity style={styles.addCardBtn} onPress={() => setCartaoFormVisible(true)}>
-                    <Ionicons name="add-circle-outline" size={20} color="#FFAD19" />
-                    <Text style={styles.addCardText}>Cadastrar cartão de {labelTipoPagamento(metodo).toLowerCase()}</Text>
-                  </TouchableOpacity>
-                ) : (
-                  cartoes.map((cartao) => {
-                    const selected = cartaoSelecionado?.id === cartao.id;
-                    return (
-                      <TouchableOpacity
-                        key={cartao.id}
-                        style={[styles.optionRow, selected && styles.optionRowSelected]}
-                        onPress={() => setCartaoSelecionado(cartao)}
-                      >
-                        <Ionicons name="card-outline" size={18} color="#FFAD19" />
-                        <View style={styles.optionInfo}>
-                          <Text style={styles.optionTitle}>{labelCartao(cartao)}</Text>
-                          <Text style={styles.optionSub}>
-                          {formatarCartaoExibicao(cartao.ultimosDigitos)} · {cartao.bandeira}
-                        </Text>
-                        </View>
-                        {selected ? <Ionicons name="checkmark-circle" size={20} color="#FFAD19" /> : null}
-                      </TouchableOpacity>
-                    );
-                  })
-                )}
-                {cartoes.length > 0 ? (
-                  <TouchableOpacity style={styles.linkBtn} onPress={() => setCartaoFormVisible(true)}>
-                    <Text style={styles.linkBtnText}>+ Adicionar outro cartão</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : (
-              <View style={styles.panel}>
-                <Text style={styles.dinheiroText}>
-                  O pagamento em dinheiro será confirmado na entrega. Tenha o valor exato ou informe se precisa de troco.
-                </Text>
-              </View>
-            )}
+                  ) : (
+                    cartoes.map((cartao) => {
+                      const selected = cartaoSelecionado?.id === cartao.id;
+                      return (
+                        <TouchableOpacity
+                          key={cartao.id}
+                          style={[styles.optionRow, selected && styles.optionRowSelected]}
+                          onPress={() => setCartaoSelecionado(cartao)}
+                        >
+                          <Ionicons name="card-outline" size={18} color="#FFAD19" />
+                          <View style={styles.optionInfo}>
+                            <Text style={styles.optionTitle}>{labelCartao(cartao)}</Text>
+                            <Text style={styles.optionSub}>
+                              {formatarCartaoExibicao(cartao.ultimosDigitos)} · {cartao.bandeira}
+                            </Text>
+                          </View>
+                          {selected ? <Ionicons name="checkmark-circle" size={20} color="#FFAD19" /> : null}
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                  {cartoes.length > 0 ? (
+                    <TouchableOpacity style={styles.linkBtn} onPress={() => setCartaoFormVisible(true)}>
+                      <Text style={styles.linkBtnText}>+ Adicionar outro cartão</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {cobrancas.map((c) => (
+                    <View key={c.recebedor.fornecedorId} style={styles.recebedorCard}>
+                      <View style={styles.recebedorHead}>
+                        <Text style={styles.recebedorNome}>{c.recebedor.fornecedorNome}</Text>
+                        <Text style={styles.recebedorValor}>{formatarPreco(c.recebedor.valor)}</Text>
+                      </View>
+                      <Text style={styles.contaRotulo}>Repasse para a conta:</Text>
+                      {renderConta(c.conta)}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.panel}>
+                  {cobrancas.map((c) => (
+                    <View key={c.recebedor.fornecedorId} style={styles.recebedorCard}>
+                      <View style={styles.recebedorHead}>
+                        <Text style={styles.recebedorNome}>{c.recebedor.fornecedorNome}</Text>
+                        <Text style={styles.recebedorValor}>{formatarPreco(c.recebedor.valor)}</Text>
+                      </View>
+                      {opcao === 'pix' ? (
+                        c.pix ? (
+                          <>
+                            <Text style={styles.contaRotulo}>Chave Pix: {c.conta?.chavePix}</Text>
+                            <Text style={styles.contaLinha}>Recebedor: {c.conta?.titular}</Text>
+                            <Text style={styles.contaRotulo}>Pix copia e cola</Text>
+                            <View style={styles.codigoBox}>
+                              <Text selectable style={styles.codigoTexto}>{c.pix}</Text>
+                            </View>
+                            <Text style={styles.codigoDica}>Toque e segure o código para copiar.</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.semConta}>Fornecedor ainda não cadastrou chave Pix.</Text>
+                        )
+                      ) : c.boleto ? (
+                        <>
+                          <Text style={styles.contaRotulo}>Beneficiário</Text>
+                          {renderConta(c.conta)}
+                          <Text style={styles.contaRotulo}>Linha digitável · vence {formatarData(vencimento)}</Text>
+                          <View style={styles.codigoBox}>
+                            <Text selectable style={styles.codigoTexto}>{c.boleto.linhaDigitavel}</Text>
+                          </View>
+                          <Text style={styles.codigoDica}>Toque e segure para copiar e pagar no app do banco.</Text>
+                        </>
+                      ) : (
+                        <Text style={styles.semConta}>Fornecedor ainda não cadastrou dados bancários.</Text>
+                      )}
+                    </View>
+                  ))}
+                  <Text style={styles.avisoDemo}>
+                    Pagamento de demonstração: nenhum valor é cobrado de verdade.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
 
             {erro ? <Text style={styles.erro}>{erro}</Text> : null}
             {falhouCarregar && !loading ? (
@@ -283,7 +410,9 @@ export function CheckoutPaymentModal({
                 <Text style={styles.cancelText}>Voltar</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm}>
-                <Text style={styles.confirmText}>Confirmar e pedir</Text>
+                <Text style={styles.confirmText}>
+                  {opcao === 'cartao' ? 'Pagar e pedir' : opcao === 'pix' ? 'Já paguei, pedir' : 'Gerar boleto e pedir'}
+                </Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -293,7 +422,7 @@ export function CheckoutPaymentModal({
       <CartaoFormModal
         visible={cartaoFormVisible}
         empresaId={empresaId}
-        tipo={metodo === 'debito' ? 'debito' : 'credito'}
+        tipo={tipoCartao}
         onClose={() => setCartaoFormVisible(false)}
         onSaved={async () => {
           setCartaoFormVisible(false);
@@ -305,6 +434,105 @@ export function CheckoutPaymentModal({
 }
 
 const styles = StyleSheet.create({
+  opcoesRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  opcaoChip: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  corpo: {
+    flexGrow: 0,
+    maxHeight: 360,
+  },
+  tipoCartaoRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  tipoCartaoBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EEE',
+  },
+  tipoCartaoBtnSelected: {
+    borderColor: '#FFAD19',
+    backgroundColor: '#FFF8E7',
+  },
+  tipoCartaoText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  tipoCartaoTextSelected: {
+    color: '#B87800',
+  },
+  recebedorCard: {
+    borderWidth: 1,
+    borderColor: '#EEE',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  recebedorHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  recebedorNome: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#222',
+  },
+  recebedorValor: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#B87800',
+  },
+  contaRotulo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#444',
+    marginTop: 6,
+  },
+  contaLinha: {
+    fontSize: 12,
+    color: '#555',
+    marginTop: 2,
+  },
+  semConta: {
+    fontSize: 12,
+    color: '#B3261E',
+    marginTop: 4,
+  },
+  codigoBox: {
+    backgroundColor: '#F6F6F6',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  codigoTexto: {
+    fontSize: 12,
+    color: '#222',
+    fontFamily: 'monospace',
+  },
+  codigoDica: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 4,
+  },
+  avisoDemo: {
+    fontSize: 11,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 4,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

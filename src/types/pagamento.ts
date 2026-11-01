@@ -1,6 +1,6 @@
 import type { TipoChavePix } from '../utils/pixUtils';
 
-export type TipoPagamento = 'pix' | 'credito' | 'debito' | 'dinheiro';
+export type TipoPagamento = 'pix' | 'credito' | 'debito' | 'boleto' | 'dinheiro';
 
 /** Alias usado nas solicitações de compra — mesmos valores da API. */
 export type MetodoPagamento = TipoPagamento;

@@ -175,7 +175,7 @@ export function PdvScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.produtoNome} numberOfLines={2}>{item.nome}</Text>
           <Text style={styles.produtoMeta}>
-            {item.codigo} · {esgotado ? 'Sem estoque' : `${formatarQuantidade(item.disponivel, item.unidade)} disponíveis`}
+            {item.codigoBarras ?? item.codigo} · {esgotado ? 'Sem estoque' : `${formatarQuantidade(item.disponivel, item.unidade)} disponíveis`}
           </Text>
         </View>
         <Text style={styles.produtoPreco}>{formatarPreco(item.precoVenda)}</Text>
@@ -189,17 +189,20 @@ export function PdvScreen() {
   const painelProdutos = (
     <View style={[styles.painel, largo && styles.painelProdutos]}>
       <View style={styles.buscaBox}>
-        <Ionicons name="search" size={18} color={PDV.suave} />
+        <Ionicons name="barcode-outline" size={20} color={PDV.suave} />
         <TextInput
           style={styles.buscaInput}
           value={pdv.busca}
           onChangeText={pdv.setBusca}
-          placeholder="Buscar por nome ou código"
+          placeholder="Código de barras ou nome do produto"
           placeholderTextColor={PDV.suave}
           autoCorrect={false}
           autoCapitalize="none"
           returnKeyType="search"
-          accessibilityLabel="Buscar produto por nome ou código"
+          onSubmitEditing={() => void pdv.lerCodigo()}
+          blurOnSubmit={false}
+          autoFocus
+          accessibilityLabel="Ler código de barras ou buscar produto pelo nome"
         />
         {pdv.carregandoProdutos && <ActivityIndicator size="small" color={cor} />}
         {!!pdv.busca && !pdv.carregandoProdutos && (
@@ -215,7 +218,7 @@ export function PdvScreen() {
         renderItem={renderProduto}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          pdv.carregandoProdutos ? null : (
+          pdv.carregandoProdutos ? undefined : (
             <View style={styles.vazio}>
               <Ionicons name="cube-outline" size={30} color={PDV.suave} />
               <Text style={styles.vazioTexto}>

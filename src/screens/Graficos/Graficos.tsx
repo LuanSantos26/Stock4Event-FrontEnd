@@ -1,52 +1,62 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { BackTitleHeader } from '../../components/Header/BackTitleHeader';
 import { useAppGoBack } from '../../hooks/useAppGoBack';
+import { useAuth } from '../../context/AuthContext';
+import { buscarResumoFinanceiro } from '../../services/financeiroService';
+import { formatarPreco } from '../../services/productService';
 import { COMPANY_COLORS } from '../../theme/theme';
+import type { FinanceiroResumo } from '../../types/financeiro';
+import {
+  calcularIndicadores,
+  formatarValorCurto,
+  montarSerieMensal,
+  type MetricaGrafico,
+} from '../../utils/graficosFinanceiro';
 
-type Periodo = 'Dia' | 'Mês' | 'Ano';
-
-const dadosGrafico: Record<Periodo, { label: string; valor: number }[]> = {
-  Dia: [
-    { label: 'Seg', valor: 40 },
-    { label: 'Ter', valor: 60 },
-    { label: 'Qua', valor: 50 },
-    { label: 'Qui', valor: 90 },
-    { label: 'Sex', valor: 75 },
-    { label: 'Sáb', valor: 85 },
-    { label: 'Dom', valor: 55 },
-  ],
-  Mês: [
-    { label: 'Jan', valor: 40 },
-    { label: 'Fev', valor: 62 },
-    { label: 'Mar', valor: 58 },
-    { label: 'Abr', valor: 80 },
-    { label: 'Mai', valor: 70 },
-    { label: 'Jun', valor: 95 },
-  ],
-  Ano: [
-    { label: '2020', valor: 55 },
-    { label: '2021', valor: 68 },
-    { label: '2022', valor: 74 },
-    { label: '2023', valor: 86 },
-    { label: '2024', valor: 92 },
-    { label: '2025', valor: 100 },
-  ],
-};
+const METRICAS: MetricaGrafico[] = ['Vendas', 'Compras', 'Lucro'];
 
 export function EmpresaGraficosScreen() {
-  const [periodo, setPeriodo] = useState<Periodo>('Dia');
+  const [metrica, setMetrica] = useState<MetricaGrafico>('Vendas');
   const goBack = useAppGoBack('Home');
+  const { user } = useAuth();
+  const empresaId = user?.empresa?.id;
 
-  const dados = useMemo(() => dadosGrafico[periodo], [periodo]);
-  const valorMaximo = Math.max(...dados.map((item) => item.valor));
+  const [resumo, setResumo] = useState<FinanceiroResumo | null>(null);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState('');
+
+  const carregar = useCallback(async () => {
+    if (!empresaId) return;
+    setCarregando(true);
+    setErro('');
+    try {
+      setResumo(await buscarResumoFinanceiro(empresaId));
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível carregar os gráficos.');
+    } finally {
+      setCarregando(false);
+    }
+  }, [empresaId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void carregar();
+    }, [carregar]),
+  );
+
+  const dados = useMemo(() => montarSerieMensal(resumo, metrica), [resumo, metrica]);
+  const indicadores = useMemo(() => calcularIndicadores(resumo), [resumo]);
+  const semDados = dados.every((item) => item.valor === 0);
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -59,14 +69,14 @@ export function EmpresaGraficosScreen() {
         <BackTitleHeader title="Gráficos da empresa" onBack={goBack} />
 
         <View style={styles.segmentedControl}>
-          {(['Dia', 'Mês', 'Ano'] as Periodo[]).map((item) => (
+          {METRICAS.map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.segmentButton, periodo === item && styles.segmentButtonSelected]}
-              onPress={() => setPeriodo(item)}
+              style={[styles.segmentButton, metrica === item && styles.segmentButtonSelected]}
+              onPress={() => setMetrica(item)}
             >
               <Text
-                style={[styles.segmentText, periodo === item && styles.segmentTextSelected]}
+                style={[styles.segmentText, metrica === item && styles.segmentTextSelected]}
               >
                 {item}
               </Text>
@@ -75,38 +85,56 @@ export function EmpresaGraficosScreen() {
         </View>
 
         <View style={styles.chartCard}>
-          <Text style={styles.sectionTitle}>Vendas por {periodo.toLowerCase()}</Text>
+          <Text style={styles.sectionTitle}>{metrica} por mês</Text>
 
-          <View style={styles.chartArea}>
-            {dados.map((item) => (
-              <View key={item.label} style={styles.barColumn}>
-                <View style={styles.barValueLabelWrap}>
-                  <Text style={styles.barValueLabel}>{item.valor}k</Text>
+          {carregando && !resumo ? (
+            <View style={styles.stateBox}>
+              <ActivityIndicator color={COMPANY_COLORS.primary} />
+            </View>
+          ) : erro ? (
+            <View style={styles.stateBox}>
+              <Text style={styles.stateText}>{erro}</Text>
+              <TouchableOpacity onPress={() => void carregar()}>
+                <Text style={styles.retryText}>Tentar novamente</Text>
+              </TouchableOpacity>
+            </View>
+          ) : dados.length === 0 || semDados ? (
+            <View style={styles.stateBox}>
+              <Text style={styles.stateText}>Ainda não há {metrica.toLowerCase()} registradas no período.</Text>
+            </View>
+          ) : (
+            <View style={styles.chartArea}>
+              {dados.map((item, index) => (
+                <View key={`${item.label}-${index}`} style={styles.barColumn}>
+                  <View style={styles.barValueLabelWrap}>
+                    <Text style={styles.barValueLabel}>{formatarValorCurto(item.valor)}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.bar,
+                      item.valor < 0 && styles.barNegativa,
+                      { height: `${Math.max(item.alturaPercentual, 4)}%` },
+                    ]}
+                  />
+                  <Text style={styles.barLabel}>{item.label}</Text>
                 </View>
-                <View
-                  style={[
-                    styles.bar,
-                    { height: `${(item.valor / valorMaximo) * 100}%` },
-                  ]}
-                />
-                <Text style={styles.barLabel}>{item.label}</Text>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.summaryGrid}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Receita</Text>
-            <Text style={styles.metricValue}>R$ 64.800</Text>
+            <Text style={styles.metricLabel}>Receita (vendas no período)</Text>
+            <Text style={styles.metricValue}>{formatarPreco(indicadores.receita)}</Text>
           </View>
           <View style={styles.metricCard}>
             <Text style={styles.metricLabel}>Ticket médio</Text>
-            <Text style={styles.metricValue}>R$ 498</Text>
+            <Text style={styles.metricValue}>{formatarPreco(indicadores.ticketMedio)}</Text>
           </View>
           <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Meta</Text>
-            <Text style={styles.metricValue}>84%</Text>
+            <Text style={styles.metricLabel}>Margem</Text>
+            <Text style={styles.metricValue}>{indicadores.margemPercentual}%</Text>
           </View>
         </View>
       </ScrollView>
@@ -196,10 +224,27 @@ const styles = StyleSheet.create({
   bar: {
     width: 22,
     maxWidth: 32,
-    minHeight: 28,
     backgroundColor: COMPANY_COLORS.primary,
     borderRadius: 10,
     marginHorizontal: 4,
+  },
+  barNegativa: {
+    backgroundColor: '#C0392B',
+  },
+  stateBox: {
+    height: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  stateText: {
+    color: '#666',
+    textAlign: 'center',
+  },
+  retryText: {
+    color: COMPANY_COLORS.primary,
+    fontWeight: '700',
   },
   barLabel: {
     marginTop: 8,

@@ -1,0 +1,16 @@
+{
+  "short_name": "Stock4event",
+  "name": "Stock4event",
+  "description": "Estoque e vendas para eventos",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#092D5E",
+  "background_color": "#092D5E",
+  "icons": [
+    { "src": "/logo192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/logo512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/logo512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

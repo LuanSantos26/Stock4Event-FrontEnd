@@ -16,6 +16,7 @@ import {
   removerDoCarrinho,
   totalCentavos,
 } from '../../utils/pdvCarrinho';
+import { normalizarCodigoBarras, pareceCodigoBarras } from '../../utils/codigoBarras';
 
 const ATRASO_BUSCA_MS = 300;
 
@@ -109,6 +110,36 @@ export function usePdv() {
     });
   }, []);
 
+  /**
+   * Enter no campo de busca (leitor de código de barras ou digitação): se o texto for um código,
+   * acha o produto exato e já coloca 1 unidade no carrinho, limpando o campo para a próxima leitura.
+   */
+  const lerCodigo = useCallback(async () => {
+    const codigo = normalizarCodigoBarras(busca);
+    if (!barracaId || !pareceCodigoBarras(codigo)) return;
+    setErroVenda('');
+    try {
+      const lista = await buscarProdutosPdv(barracaId, codigo);
+      const produto = lista.find((p) => p.codigoBarras === codigo || p.codigo === codigo);
+      if (!produto) {
+        setAviso(`Nenhum produto com o código ${codigo} neste ponto de venda.`);
+        return;
+      }
+      if (produto.disponivel <= 0) {
+        setAviso(`${produto.nome} está sem estoque neste ponto de venda.`);
+        return;
+      }
+      setCarrinho((c) => {
+        const r = adicionarAoCarrinho(c, produto);
+        setAviso(r.aviso ?? `${produto.nome} adicionado.`);
+        return r.carrinho;
+      });
+      setBusca('');
+    } catch (e) {
+      setAviso(e instanceof Error ? e.message : 'Não foi possível ler o código.');
+    }
+  }, [barracaId, busca]);
+
   const definirQuantidade = useCallback((produtoId: number, quantidade: number) => {
     setCarrinho((c) => {
       const r = alterarQuantidade(c, produtoId, quantidade);
@@ -201,7 +232,7 @@ export function usePdv() {
 
   return {
     quiosques, carregandoQuiosques, erroQuiosques, carregarQuiosques, barracaId, trocarPontoDeVenda,
-    busca, setBusca, produtos, carregandoProdutos, erroProdutos,
+    busca, setBusca, lerCodigo, produtos, carregandoProdutos, erroProdutos,
     recarregarProdutos: () => barracaId && carregarProdutos(busca, barracaId),
     carrinho, aviso, adicionar, definirQuantidade, remover, limparCarrinho,
     forma, setForma, valorRecebido, setValorRecebido, clienteNome, setClienteNome, clienteDocumento, setClienteDocumento,

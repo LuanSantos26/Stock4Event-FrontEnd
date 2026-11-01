@@ -10,6 +10,7 @@ import { SacolaScreen } from '../screens/Sacola/SacolaScreen';
 import { PedidoAcompanhamentoScreen } from '../screens/PedidoAcompanhamento/PedidoAcompanhamentoScreen';
 import { ConfiguracoesScreen } from '../screens/Configuracoes/ConfiguracoesScreen';
 import { FormasPagamentoScreen } from '../screens/FormasPagamento/FormasPagamentoScreen';
+import { DadosBancariosScreen } from '../screens/DadosBancarios/DadosBancariosScreen';
 import { EnderecosScreen } from '../screens/Enderecos/EnderecosScreen';
 import { ManageProductsScreen } from '../screens/ManageProducts/ManageProductsScreen';
 import { CardsScreen } from '../screens/Cards/CardsScreen';
@@ -43,6 +44,7 @@ export function MainNavigator() {
     <Stack.Screen name="Quiosque" component={QuiosqueScreen} />
     <Stack.Screen name="Configuracoes" component={ConfiguracoesScreen} />
     <Stack.Screen name="FormasPagamento" component={FormasPagamentoScreen} />
+    <Stack.Screen name="DadosBancarios" component={DadosBancariosScreen} />
     <Stack.Screen name="Enderecos" component={EnderecosScreen} />
     <Stack.Screen name="AddItem" component={ManageProductsScreen} />
     <Stack.Screen name="Cart" component={CartScreen} />

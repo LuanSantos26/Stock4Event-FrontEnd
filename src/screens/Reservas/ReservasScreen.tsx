@@ -29,6 +29,7 @@ export function ReservasScreen() {
     navigation,
     user,
     gruposFornecedor,
+    recebedores,
     itemCount,
     total,
     updateQuantity,
@@ -289,6 +290,7 @@ export function ReservasScreen() {
           empresaId={user.empresa.id}
           cnpjEmpresa={user.empresa.cnpj}
           enderecoResumo={enderecoSelecionado?.resumo}
+          recebedores={recebedores}
           onClose={() => setModalPagamento(false)}
           onConfirm={processarCheckout}
         />

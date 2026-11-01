@@ -4,6 +4,8 @@ export type FormaPagamentoPdv = 'pix' | 'credito' | 'debito' | 'dinheiro';
 export interface ProdutoPdv {
   id: number;
   codigo: string;
+  /** Código de barras (EAN/GTIN) para leitura no caixa. */
+  codigoBarras?: string | null;
   nome: string;
   unidade: string;
   precoVenda: number;

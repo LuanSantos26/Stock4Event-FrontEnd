@@ -217,6 +217,8 @@ export function labelMetodoPagamento(metodo?: string): string {
       return 'Cartão de crédito';
     case 'debito':
       return 'Cartão de débito';
+    case 'boleto':
+      return 'Boleto';
     case 'dinheiro':
       return 'Dinheiro';
     default:

@@ -16,6 +16,8 @@ export function labelTipoPagamento(tipo: string): string {
       return 'Crédito';
     case 'debito':
       return 'Débito';
+    case 'boleto':
+      return 'Boleto';
     case 'dinheiro':
       return 'Dinheiro';
     default:
@@ -23,8 +25,12 @@ export function labelTipoPagamento(tipo: string): string {
   }
 }
 
-export function iconeTipoPagamento(tipo: string): 'phone-portrait-outline' | 'card-outline' | 'card' | 'cash-outline' {
+export function iconeTipoPagamento(
+  tipo: string,
+): 'phone-portrait-outline' | 'card-outline' | 'card' | 'cash-outline' | 'barcode-outline' {
   switch (tipo) {
+    case 'boleto':
+      return 'barcode-outline';
     case 'pix':
       return 'phone-portrait-outline';
     case 'credito':

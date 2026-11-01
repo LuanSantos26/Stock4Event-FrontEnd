@@ -29,6 +29,7 @@ export function SacolaScreen() {
     scrollBottomPaddingWithFooter,
     user,
     gruposFornecedor,
+    recebedores,
     itemCount,
     total,
     taxaEntregaTotal,
@@ -241,11 +242,10 @@ export function SacolaScreen() {
           <ActivityIndicator color={COMPANY_COLORS.primary} style={{ marginVertical: 12 }} />
         ) : (
           <View style={styles.paymentRow}>
-            {(formasPagamento.length > 0
-              ? formasPagamento.map((f) => ({ id: f.tipo as MetodoPagamento, label: f.apelido }))
-              : METODOS_PADRAO
-            ).map((forma) => {
-              const selected = (metodoPagamento ?? 'pix') === forma.id;
+            {METODOS_PADRAO.map((forma) => {
+              const atual: MetodoPagamento = metodoPagamento ?? 'pix';
+              // "Cartão" fica marcado tanto para crédito quanto para débito.
+              const selected = forma.id === 'credito' ? atual === 'credito' || atual === 'debito' : atual === forma.id;
               return (
                 <TouchableOpacity
                   key={forma.id}
@@ -265,18 +265,13 @@ export function SacolaScreen() {
             })}
           </View>
         )}
-        {formasPagamento.length === 0 && !loadingFormas ? (
-          <TouchableOpacity onPress={() => navigation.navigate('FormasPagamento')}>
-            <Text style={styles.paymentHint}>
-              Toque aqui para cadastrar cartões e chaves PIX
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-        {formasErro && formasPagamento.length > 0 ? (
-          <TouchableOpacity onPress={carregarFormasPagamento}>
-            <Text style={styles.retryText}>Tocar para recarregar formas de pagamento</Text>
-          </TouchableOpacity>
-        ) : null}
+        <Text style={styles.paymentHint}>
+          {(metodoPagamento ?? 'pix') === 'boleto'
+            ? 'O boleto sai com os dados bancários de cada fornecedor.'
+            : (metodoPagamento ?? 'pix') === 'pix'
+              ? 'Você paga pela chave Pix de cada fornecedor.'
+              : 'Escolha crédito ou débito e o cartão na próxima etapa.'}
+        </Text>
         </View>
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderBlock}>
@@ -353,6 +348,7 @@ export function SacolaScreen() {
           empresaId={user.empresa.id}
           cnpjEmpresa={user.empresa.cnpj}
           enderecoResumo={enderecoSelecionado?.resumo}
+          recebedores={recebedores}
           onClose={() => setModalPagamento(false)}
           onConfirm={processarCheckout}
         />

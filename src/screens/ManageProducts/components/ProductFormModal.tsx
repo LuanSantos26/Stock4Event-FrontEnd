@@ -25,6 +25,7 @@ import {
   formatarPreco,
   uploadImagemProduto,
 } from '../../../services/productService';
+import { codigoBarrasValido, normalizarCodigoBarras } from '../../../utils/codigoBarras';
 
 interface ProductFormModalProps {
   visible: boolean;
@@ -48,6 +49,7 @@ export function ProductFormModal({
   const [estoque, setEstoque] = useState('');
   const [unidade, setUnidade] = useState('UN');
   const [descricao, setDescricao] = useState('');
+  const [codigoBarras, setCodigoBarras] = useState('');
   const [imagemUrl, setImagemUrl] = useState<string | undefined>();
   const [localImageUri, setLocalImageUri] = useState<string | undefined>();
   const [localImageMime, setLocalImageMime] = useState('image/jpeg');
@@ -62,6 +64,7 @@ export function ProductFormModal({
     setEstoque(produto?.estoque != null ? String(produto.estoque) : '0');
     setUnidade(produto?.unidade ?? 'UN');
     setDescricao(produto?.descricao ?? '');
+    setCodigoBarras(produto?.codigoBarras ?? '');
     setImagemUrl(produto?.imagemUrl);
     setLocalImageUri(undefined);
     setLocalImageMime('image/jpeg');
@@ -114,6 +117,12 @@ export function ProductFormModal({
       return;
     }
 
+    const codigoLimpo = normalizarCodigoBarras(codigoBarras);
+    if (codigoLimpo && !codigoBarrasValido(codigoLimpo)) {
+      setError('Código de barras inválido. Confira os números (EAN-8, EAN-13, UPC ou GTIN-14).');
+      return;
+    }
+
     const estoqueNumero = Number(estoque.replace(',', '.'));
     if (Number.isNaN(estoqueNumero) || estoqueNumero < 0) {
       setError('Informe uma quantidade em estoque válida.');
@@ -136,6 +145,7 @@ export function ProductFormModal({
         descricao: descricao.trim() || undefined,
         imagemUrl: resolvedImageUrl,
         estoque: Math.floor(estoqueNumero),
+        codigoBarras: codigoLimpo || undefined,
         empresaId: Number(empresaId),
       };
 
@@ -231,6 +241,19 @@ export function ProductFormModal({
               placeholder="0"
               keyboardType="number-pad"
             />
+
+            <Text style={styles.label}>Código de barras (opcional)</Text>
+            <TextInput
+              style={styles.input}
+              value={codigoBarras}
+              onChangeText={(t) => setCodigoBarras(normalizarCodigoBarras(t).slice(0, 14))}
+              placeholder="Ex.: 7891000100103"
+              keyboardType="number-pad"
+              maxLength={14}
+            />
+            <Text style={styles.charHint}>
+              Leia com o leitor ou digite. Se deixar vazio, o sistema cria um código interno para o PDV.
+            </Text>
 
             <Text style={styles.label}>Descrição (opcional)</Text>
             <TextInput

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,94 +6,88 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { BackTitleHeader } from '../../components/Header/BackTitleHeader';
 import { useAppGoBack } from '../../hooks/useAppGoBack';
+import { useAuth } from '../../context/AuthContext';
+import {
+  criarCaminhoneiro,
+  listarCaminhoneiros,
+  type Caminhoneiro,
+} from '../../services/logisticaService';
+import { COMPANY_COLORS } from '../../theme/theme';
 import { styles } from './cadastroCamioneirosStyles';
-
-interface Entrega {
-  nomeCliente: string;
-  cidade: string;
-  rota: string;
-  status: 'Em rota' | 'Carregando' | 'Entregue';
-}
-
-interface Caminhoneiro {
-  id: number;
-  nome: string;
-  veiculo: string;
-  rota: string;
-  entregas: Entrega[];
-}
-
-const initialMotoristas: Caminhoneiro[] = [
-  {
-    id: 1,
-    nome: 'Rafael Costa',
-    veiculo: 'Truck 27',
-    rota: 'São Paulo → Curitiba',
-    entregas: [
-      { nomeCliente: 'Ana Paula', cidade: 'Curitiba', rota: 'São Paulo → Curitiba', status: 'Em rota' },
-      { nomeCliente: 'Beto Ltda', cidade: 'Londrina', rota: 'São Paulo → Curitiba', status: 'Carregando' },
-    ],
-  },
-  {
-    id: 2,
-    nome: 'Marcos Silva',
-    veiculo: 'Truck 11',
-    rota: 'Campinas → Porto Alegre',
-    entregas: [
-      { nomeCliente: 'Maria Souza', cidade: 'Porto Alegre', rota: 'Campinas → Porto Alegre', status: 'Em rota' },
-    ],
-  },
-];
 
 export function CadastroCamioneirosScreen() {
   const goBack = useAppGoBack('Home');
-  const [motoristas, setMotoristas] = useState<Caminhoneiro[]>(initialMotoristas);
+  const { user } = useAuth();
+  const empresaId = user?.empresa?.id;
+
+  const [motoristas, setMotoristas] = useState<Caminhoneiro[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
   const [nome, setNome] = useState('');
   const [veiculo, setVeiculo] = useState('');
   const [rota, setRota] = useState('');
   const [clienteNome, setClienteNome] = useState('');
   const [clienteCidade, setClienteCidade] = useState('');
 
+  const carregar = useCallback(async () => {
+    if (!empresaId) return;
+    setCarregando(true);
+    try {
+      setMotoristas(await listarCaminhoneiros(empresaId));
+    } catch (e) {
+      Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível carregar os caminhoneiros.');
+    } finally {
+      setCarregando(false);
+    }
+  }, [empresaId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void carregar();
+    }, [carregar]),
+  );
+
   const totalEntregas = useMemo(
     () => motoristas.reduce((acc, item) => acc + item.entregas.length, 0),
     [motoristas],
   );
 
-  const cadastrarMotorista = () => {
+  const cadastrarMotorista = async () => {
+    if (salvando || !empresaId) return;
     if (!nome.trim() || !veiculo.trim() || !rota.trim()) {
       Alert.alert('Atenção', 'Preencha nome, veículo e rota do caminhoneiro.');
       return;
     }
 
-    const novoMotorista: Caminhoneiro = {
-      id: Date.now(),
-      nome: nome.trim(),
-      veiculo: veiculo.trim(),
-      rota: rota.trim(),
-      entregas: clienteNome.trim()
-        ? [
-            {
-              nomeCliente: clienteNome.trim(),
-              cidade: clienteCidade.trim() || 'Local não informado',
-              rota: rota.trim(),
-              status: 'Carregando',
-            },
-          ]
-        : [],
-    };
-
-    setMotoristas((prev) => [novoMotorista, ...prev]);
-    setNome('');
-    setVeiculo('');
-    setRota('');
-    setClienteNome('');
-    setClienteCidade('');
-
-    Alert.alert('Sucesso', 'Caminhoneiro cadastrado com sucesso.');
+    setSalvando(true);
+    try {
+      const novo = await criarCaminhoneiro({
+        empresaId,
+        nome: nome.trim(),
+        veiculo: veiculo.trim(),
+        rota: rota.trim(),
+        entrega: clienteNome.trim()
+          ? { nomeCliente: clienteNome.trim(), cidade: clienteCidade.trim() || undefined }
+          : undefined,
+      });
+      setMotoristas((prev) => [novo, ...prev.filter((m) => m.id !== novo.id)]);
+      setNome('');
+      setVeiculo('');
+      setRota('');
+      setClienteNome('');
+      setClienteCidade('');
+      Alert.alert('Sucesso', 'Caminhoneiro cadastrado com sucesso.');
+    } catch (e) {
+      Alert.alert('Erro', e instanceof Error ? e.message : 'Não foi possível salvar o caminhoneiro.');
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -108,7 +102,7 @@ export function CadastroCamioneirosScreen() {
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryValue}>{motoristas.length}</Text>
-          <Text style={styles.summaryLabel}>caminhoneiros ativos</Text>
+          <Text style={styles.summaryLabel}>caminhoneiros cadastrados</Text>
           <Text style={styles.summarySub}>Total de entregas: {totalEntregas}</Text>
         </View>
 
@@ -147,13 +141,28 @@ export function CadastroCamioneirosScreen() {
             placeholder="Ex: Campinas"
           />
 
-          <TouchableOpacity style={styles.button} onPress={cadastrarMotorista}>
-            <Text style={styles.buttonText}>Salvar caminhoneiro</Text>
+          <TouchableOpacity
+            style={[styles.button, salvando ? { opacity: 0.6 } : null]}
+            onPress={() => void cadastrarMotorista()}
+            disabled={salvando}
+          >
+            {salvando ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.buttonText}>Salvar caminhoneiro</Text>
+            )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.listCard}>
           <Text style={styles.sectionTitle}>Caminhoneiros cadastrados</Text>
+
+          {carregando && motoristas.length === 0 ? (
+            <ActivityIndicator color={COMPANY_COLORS.primary} />
+          ) : null}
+          {!carregando && motoristas.length === 0 ? (
+            <Text style={styles.semEntrega}>Nenhum caminhoneiro cadastrado ainda.</Text>
+          ) : null}
 
           {motoristas.map((motorista) => (
             <View key={motorista.id} style={styles.motoristaCard}>
@@ -167,7 +176,7 @@ export function CadastroCamioneirosScreen() {
               {motorista.entregas.length > 0 ? (
                 <View style={styles.entregasList}>
                   {motorista.entregas.map((entrega, index) => (
-                    <View key={`${motorista.id}-${index}`} style={styles.entregaItem}>
+                    <View key={entrega.id ?? `${motorista.id}-${index}`} style={styles.entregaItem}>
                       <View style={styles.dot} />
                       <View style={styles.entregaInfo}>
                         <Text style={styles.entregaCliente}>{entrega.nomeCliente}</Text>
