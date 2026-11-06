@@ -111,22 +111,34 @@ export function usePdv() {
   }, []);
 
   /**
-   * Enter no campo de busca (leitor de código de barras ou digitação): se o texto for um código,
-   * acha o produto exato e já coloca 1 unidade no carrinho, limpando o campo para a próxima leitura.
+   * Enter no campo de busca (leitor de código de barras ou digitação): acha o produto pelo
+   * código de barras, pelo código interno ou, se só um produto bater com o nome, por ele;
+   * coloca 1 unidade no carrinho e limpa o campo para a próxima leitura.
    */
   const lerCodigo = useCallback(async () => {
-    const codigo = normalizarCodigoBarras(busca);
-    if (!barracaId || !pareceCodigoBarras(codigo)) return;
+    const texto = busca.trim();
+    if (!barracaId || !texto) return;
+    const digitos = normalizarCodigoBarras(texto);
+    // Leitores às vezes mandam espaços ou hífens no meio: se for "quase só número", usa os dígitos.
+    const termo = pareceCodigoBarras(digitos) && digitos.length >= texto.replace(/[\s-]/g, '').length ? digitos : texto;
     setErroVenda('');
     try {
-      const lista = await buscarProdutosPdv(barracaId, codigo);
-      const produto = lista.find((p) => p.codigoBarras === codigo || p.codigo === codigo);
+      const lista = await buscarProdutosPdv(barracaId, termo);
+      const alvo = termo.toLowerCase();
+      const produto =
+        lista.find((p) => p.codigoBarras === termo || (p.codigo ?? '').toLowerCase() === alvo) ??
+        (lista.length === 1 ? lista[0] : undefined);
       if (!produto) {
-        setAviso(`Nenhum produto com o código ${codigo} neste ponto de venda.`);
+        setAviso(
+          lista.length > 1
+            ? `${lista.length} produtos encontrados para "${texto}". Toque no produto desejado.`
+            : `Nenhum produto com o código ${texto} neste quiosque.`,
+        );
+        setProdutos(lista);
         return;
       }
       if (produto.disponivel <= 0) {
-        setAviso(`${produto.nome} está sem estoque neste ponto de venda.`);
+        setAviso(`${produto.nome} está sem estoque neste quiosque.`);
         return;
       }
       setCarrinho((c) => {

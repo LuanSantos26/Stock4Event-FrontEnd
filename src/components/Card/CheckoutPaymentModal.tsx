@@ -32,6 +32,7 @@ import {
   vencimentoPadrao,
 } from '../../utils/pagamentoSimulado';
 import { CartaoFormModal } from './CartaoFormModal';
+import { QrCode } from '../QrCode';
 
 /** Dados de pagamento de um pedido (um pedido por fornecedor). */
 export interface PagamentoFornecedor {
@@ -367,6 +368,10 @@ export function CheckoutPaymentModal({
                           <>
                             <Text style={styles.contaRotulo}>Chave Pix: {c.conta?.chavePix}</Text>
                             <Text style={styles.contaLinha}>Recebedor: {c.conta?.titular}</Text>
+                            <View style={styles.pixQrBox}>
+                              <QrCode value={c.pix} size={200} />
+                              <Text style={styles.codigoDica}>Escaneie com o app do seu banco</Text>
+                            </View>
                             <Text style={styles.contaRotulo}>Pix copia e cola</Text>
                             <View style={styles.codigoBox}>
                               <Text selectable style={styles.codigoTexto}>{c.pix}</Text>
@@ -510,6 +515,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#B3261E',
     marginTop: 4,
+  },
+  pixQrBox: {
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 10,
   },
   codigoBox: {
     backgroundColor: '#F6F6F6',
