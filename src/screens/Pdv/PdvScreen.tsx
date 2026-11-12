@@ -28,6 +28,7 @@ import { parseNumeroInput } from '../../utils/estoqueQuiosque';
 import { quantidadeDeItens, subtotalCentavos } from '../../utils/pdvCarrinho';
 import type { FormaPagamentoPdv, ItemCarrinhoPdv, ProdutoPdv, VendaPdv } from '../../types/pdv';
 import { usePdv } from './usePdv';
+import { PixPdv } from './PixPdv';
 import { PDV, styles } from './styles';
 
 const LARGURA_DUAS_COLUNAS = 768;
@@ -316,7 +317,8 @@ export function PdvScreen() {
               )}
             </View>
           )}
-          {pdv.forma && pdv.forma !== 'dinheiro' && (
+          {pdv.forma === 'pix' && <PixPdv totalCentavos={pdv.total} barracaId={pdv.barracaId} />}
+          {pdv.forma && pdv.forma !== 'dinheiro' && pdv.forma !== 'pix' && (
             <Text style={[styles.produtoMeta, { marginTop: 8 }]}>
               Registre o pagamento na maquininha/app do banco. O sistema só anota a forma de pagamento.
             </Text>
