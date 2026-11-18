@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { listarNotificacoes } from '../../services/notificacaoService';
+import { listarNotificacoes, perfilDasNotificacoes } from '../../services/notificacaoService';
 import { contarNaoLidas } from '../../utils/notificacoesStorage';
 import { formatarDiaSemana } from '../../utils/dateFormat';
 import { CalendarModal } from './CalendarModal';
@@ -27,8 +27,9 @@ export function HeaderActions({
   datePillStyle,
   iconButtonStyle,
 }: HeaderActionsProps) {
-  const { user } = useAuth();
+  const { user, perfilUso } = useAuth();
   const empresaId = user?.empresa?.id;
+  const perfil = perfilDasNotificacoes(perfilUso);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -37,13 +38,13 @@ export function HeaderActions({
   const carregarNaoLidas = useCallback(async () => {
     if (!empresaId) return;
     try {
-      const lista = await listarNotificacoes(empresaId);
+      const lista = await listarNotificacoes(empresaId, perfil);
       const count = await contarNaoLidas(empresaId, lista.map((n) => n.id));
       setUnreadCount(count);
     } catch {
       setUnreadCount(0);
     }
-  }, [empresaId]);
+  }, [empresaId, perfil]);
 
   useFocusEffect(
     useCallback(() => {

@@ -18,6 +18,7 @@ import { styles } from './styles';
 import { useProductDetail } from './useProductDetail';
 import { useAuth } from '../../context/AuthContext';
 import { ClienteProductDetail } from './ClienteProductDetail';
+import { TipoVendaSelector } from '../../components/produto/TipoVendaSelector';
 
 export function ProductDetailScreen() {
   const {
@@ -47,6 +48,13 @@ export function ProductDetailScreen() {
     estoqueLabel,
     estoqueColor,
     handleAddToCart,
+    precoPalete,
+    unidadesPorPalete,
+    temPalete,
+    tipoVenda,
+    setTipoVenda,
+    precoSelecionado,
+    maximoSelecionavel,
   } = useProductDetail();
   const { perfilUso } = useAuth();
 
@@ -71,6 +79,13 @@ export function ProductDetailScreen() {
         onBack={goBack}
         onOpenStore={goBack}
         onAddToCart={handleAddToCart}
+        temPalete={temPalete}
+        tipoVenda={tipoVenda}
+        onChangeTipoVenda={setTipoVenda}
+        precoPalete={precoPalete}
+        unidadesPorPalete={unidadesPorPalete}
+        precoSelecionado={precoSelecionado}
+        maximoSelecionavel={maximoSelecionavel}
       />
     );
   }
@@ -122,6 +137,17 @@ export function ProductDetailScreen() {
                 <Text style={styles.unitChipText}>/{unidade}</Text>
               </View>
             </View>
+
+            {!isCatalogo && temPalete && precoPalete && unidadesPorPalete ? (
+              <TipoVendaSelector
+                tipoVenda={tipoVenda}
+                onChange={setTipoVenda}
+                precoVenda={precoVenda}
+                precoPalete={precoPalete}
+                unidadesPorPalete={unidadesPorPalete}
+                unidade={unidade}
+              />
+            ) : null}
 
             <View style={[styles.stockBadge, { borderColor: estoqueColor }]}>
               <Ionicons name="cube-outline" size={16} color={estoqueColor} />
@@ -216,8 +242,8 @@ export function ProductDetailScreen() {
             <TouchableOpacity
               style={[styles.quantityButton, esgotado && styles.quantityButtonDisabled]}
               activeOpacity={0.8}
-              disabled={esgotado || quantity >= estoqueRestante}
-              onPress={() => setQuantity((q) => Math.min(estoqueRestante, q + 1))}
+              disabled={esgotado || quantity >= maximoSelecionavel}
+              onPress={() => setQuantity((q) => Math.min(maximoSelecionavel, q + 1))}
             >
               <Ionicons name="add" size={24} color="#FFF" />
             </TouchableOpacity>
@@ -235,7 +261,7 @@ export function ProductDetailScreen() {
               <>
                 <Text style={styles.addButtonText}>{esgotado ? 'Esgotado' : 'Adicionar'}</Text>
                 {!esgotado ? (
-                  <Text style={styles.addButtonPrice}>{formatarPreco(precoVenda * quantity)}</Text>
+                  <Text style={styles.addButtonPrice}>{formatarPreco(precoSelecionado * quantity)}</Text>
                 ) : null}
               </>
             )}

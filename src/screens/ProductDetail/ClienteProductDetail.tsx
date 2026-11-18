@@ -13,6 +13,8 @@ import { formatarPreco } from '../../services/productService';
 import { useHeaderTopPadding, useBottomInset } from '../../utils/safeArea';
 import { GREEN, PRIMARY, clienteProductStyles as styles } from './clienteProductStyles';
 import { BrandLogo } from '../../components/brand/BrandLogo';
+import { TipoVendaSelector } from '../../components/produto/TipoVendaSelector';
+import type { TipoVenda } from '../../types/marketplace';
 
 interface Props {
   productName: string;
@@ -33,6 +35,16 @@ interface Props {
   onBack: () => void;
   onOpenStore: () => void;
   onAddToCart: () => void;
+  /** Venda em palete fechado (quando o fornecedor oferece). */
+  temPalete?: boolean;
+  tipoVenda?: TipoVenda;
+  onChangeTipoVenda?: (tipo: TipoVenda) => void;
+  precoPalete?: number | null;
+  unidadesPorPalete?: number | null;
+  /** Preço de uma unidade ou de um palete, conforme a escolha. */
+  precoSelecionado?: number;
+  /** Quantas unidades ou paletes ainda cabem no estoque. */
+  maximoSelecionavel?: number;
 }
 
 export function ClienteProductDetail({
@@ -54,10 +66,19 @@ export function ClienteProductDetail({
   onBack,
   onOpenStore,
   onAddToCart,
+  temPalete = false,
+  tipoVenda = 'unidade',
+  onChangeTipoVenda,
+  precoPalete,
+  unidadesPorPalete,
+  precoSelecionado,
+  maximoSelecionavel,
 }: Props) {
   const topPadding = useHeaderTopPadding(8);
   const bottomInset = useBottomInset();
-  const total = precoVenda * quantity;
+  const porPalete = temPalete && tipoVenda === 'palete';
+  const total = (precoSelecionado ?? precoVenda) * quantity;
+  const maximo = maximoSelecionavel ?? estoqueRestante;
 
   return (
     <View style={styles.root}>
@@ -114,6 +135,17 @@ export function ClienteProductDetail({
           </View>
         </View>
 
+        {temPalete && precoPalete && unidadesPorPalete && onChangeTipoVenda ? (
+          <TipoVendaSelector
+            tipoVenda={tipoVenda}
+            onChange={onChangeTipoVenda}
+            precoVenda={precoVenda}
+            precoPalete={precoPalete}
+            unidadesPorPalete={unidadesPorPalete}
+            unidade={unidade}
+          />
+        ) : null}
+
         <View style={styles.statsRow}>
           <View style={styles.stat}>
             <Ionicons name="cube-outline" size={20} color={PRIMARY} />
@@ -121,7 +153,9 @@ export function ClienteProductDetail({
           </View>
           <View style={styles.stat}>
             <Ionicons name="clipboard-outline" size={20} color={PRIMARY} />
-            <Text style={styles.statLabel}>Pedido mínimo{'\n'}1 unidade</Text>
+            <Text style={styles.statLabel}>
+              Pedido mínimo{'\n'}{porPalete ? '1 palete' : '1 unidade'}
+            </Text>
           </View>
           <View style={styles.stat}>
             <Ionicons name="bicycle-outline" size={20} color={PRIMARY} />
@@ -178,11 +212,14 @@ export function ClienteProductDetail({
           >
             <Ionicons name="remove" size={18} color={PRIMARY} />
           </TouchableOpacity>
-          <Text style={styles.qtyText}>{quantity}</Text>
+          <Text style={styles.qtyText}>
+            {quantity}
+            {porPalete ? ' pal.' : ''}
+          </Text>
           <TouchableOpacity
             style={styles.qtyBtn}
-            disabled={esgotado || quantity >= estoqueRestante}
-            onPress={() => setQuantity((q) => Math.min(estoqueRestante, q + 1))}
+            disabled={esgotado || quantity >= maximo}
+            onPress={() => setQuantity((q) => Math.min(maximo, q + 1))}
           >
             <Ionicons name="add" size={18} color={PRIMARY} />
           </TouchableOpacity>

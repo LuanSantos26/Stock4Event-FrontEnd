@@ -1,4 +1,5 @@
-export type TipoNotificacao = 'compra' | 'promocao' | 'oferta' | 'sistema';
+/** 'pedido': pedido recebido, só para o fornecedor. As outras são de quem compra. */
+export type TipoNotificacao = 'compra' | 'pedido' | 'promocao' | 'oferta' | 'sistema';
 
 export interface Notificacao {
   id: string;

@@ -50,6 +50,9 @@ export function ProductFormModal({
   const [unidade, setUnidade] = useState('UN');
   const [descricao, setDescricao] = useState('');
   const [codigoBarras, setCodigoBarras] = useState('');
+  /** Venda em palete fechado: os dois campos juntos, ou nenhum. */
+  const [precoPalete, setPrecoPalete] = useState('');
+  const [unidadesPorPalete, setUnidadesPorPalete] = useState('');
   const [imagemUrl, setImagemUrl] = useState<string | undefined>();
   const [localImageUri, setLocalImageUri] = useState<string | undefined>();
   const [localImageMime, setLocalImageMime] = useState('image/jpeg');
@@ -65,6 +68,8 @@ export function ProductFormModal({
     setUnidade(produto?.unidade ?? 'UN');
     setDescricao(produto?.descricao ?? '');
     setCodigoBarras(produto?.codigoBarras ?? '');
+    setPrecoPalete(produto?.precoPalete ? String(produto.precoPalete) : '');
+    setUnidadesPorPalete(produto?.unidadesPorPalete ? String(produto.unidadesPorPalete) : '');
     setImagemUrl(produto?.imagemUrl);
     setLocalImageUri(undefined);
     setLocalImageMime('image/jpeg');
@@ -129,6 +134,28 @@ export function ProductFormModal({
       return;
     }
 
+    // Palete fechado é opcional, mas precisa de preço e quantidade juntos.
+    const temPrecoPalete = precoPalete.trim() !== '';
+    const temUnidadesPalete = unidadesPorPalete.trim() !== '';
+    let precoPaleteNumero: number | null = null;
+    let unidadesPaleteNumero: number | null = null;
+    if (temPrecoPalete || temUnidadesPalete) {
+      precoPaleteNumero = Number(precoPalete.replace(',', '.'));
+      unidadesPaleteNumero = Number(unidadesPorPalete);
+      if (!temPrecoPalete || !temUnidadesPalete) {
+        setError('Para vender em palete fechado, informe o preço do palete e quantas unidades ele tem.');
+        return;
+      }
+      if (Number.isNaN(precoPaleteNumero) || precoPaleteNumero <= 0) {
+        setError('Informe um preço de palete válido.');
+        return;
+      }
+      if (!Number.isInteger(unidadesPaleteNumero) || unidadesPaleteNumero < 2) {
+        setError('O palete precisa ter 2 ou mais unidades (número inteiro).');
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -146,6 +173,8 @@ export function ProductFormModal({
         imagemUrl: resolvedImageUrl,
         estoque: Math.floor(estoqueNumero),
         codigoBarras: codigoLimpo || undefined,
+        precoPalete: precoPaleteNumero,
+        unidadesPorPalete: unidadesPaleteNumero,
         empresaId: Number(empresaId),
       };
 
@@ -224,6 +253,46 @@ export function ProductFormModal({
               </Text>
             ) : null}
 
+            <Text style={styles.label}>Venda em palete fechado (opcional)</Text>
+            <View style={styles.paleteRow}>
+              <View style={styles.paleteField}>
+                <Text style={styles.paleteLabel}>Preço do palete</Text>
+                <TextInput
+                  style={styles.input}
+                  value={precoPalete}
+                  onChangeText={setPrecoPalete}
+                  placeholder="0,00"
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Preço do palete fechado"
+                />
+              </View>
+              <View style={styles.paleteField}>
+                <Text style={styles.paleteLabel}>Unidades no palete</Text>
+                <TextInput
+                  style={styles.input}
+                  value={unidadesPorPalete}
+                  onChangeText={(t) => setUnidadesPorPalete(t.replace(/\D/g, ''))}
+                  placeholder="Ex.: 24"
+                  keyboardType="number-pad"
+                  accessibilityLabel="Unidades em um palete fechado"
+                />
+              </View>
+            </View>
+            <Text style={styles.charHint}>
+              {(() => {
+                const pp = Number(precoPalete.replace(',', '.'));
+                const up = Number(unidadesPorPalete);
+                const pu = Number(preco.replace(',', '.'));
+                if (pp > 0 && up > 0) {
+                  const porUnidade = pp / up;
+                  const desconto = pu > 0 ? Math.round((1 - porUnidade / pu) * 100) : 0;
+                  return `Sai ${formatarPreco(porUnidade)} por unidade no palete` +
+                    (desconto > 0 ? ` (${desconto}% mais barato que a unidade).` : '.');
+                }
+                return 'Deixe em branco para vender só por unidade. O cliente escolhe na hora da compra.';
+              })()}
+            </Text>
+
             <Text style={styles.label}>Unidade</Text>
             <TextInput
               style={styles.input}
@@ -288,6 +357,18 @@ export function ProductFormModal({
 }
 
 const styles = StyleSheet.create({
+  paleteRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  paleteField: {
+    flex: 1,
+  },
+  paleteLabel: {
+    fontSize: 12,
+    color: '#5B6472',
+    marginBottom: 4,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',

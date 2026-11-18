@@ -68,6 +68,8 @@ export function SacolaScreen() {
     sacolaVazia,
     pedidoCount,
     taxaEntregaLabel,
+    tipoEntrega,
+    setTipoEntrega,
   } = useSacola();
 
 
@@ -181,14 +183,48 @@ export function SacolaScreen() {
                 nested
                 isLast={index === grupo.itens.length - 1}
                 onUpdateQuantity={(qty) =>
-                  updateQuantity(item.fornecedorId, item.produtoId, qty)
+                  updateQuantity(item.fornecedorId, item.produtoId, qty, item.tipoVenda)
                 }
-                onRemove={() => removeItem(item.fornecedorId, item.produtoId)}
+                onRemove={() => removeItem(item.fornecedorId, item.produtoId, item.tipoVenda)}
               />
             ))}
           </View>
         ))}
         </View>
+        <View style={styles.sectionCard}>
+        <View style={styles.sectionHeaderBlock}>
+          <Text style={styles.sectionTitle}>Como receber</Text>
+          <Text style={styles.sectionSubtitle}>Entrega no seu endereço ou retirada no local do fornecedor</Text>
+        </View>
+        <View style={styles.paymentRow}>
+          {([
+            { id: 'entrega', label: 'Entrega', icon: 'bicycle-outline' },
+            { id: 'retirada', label: 'Retirar no local', icon: 'storefront-outline' },
+          ] as const).map((opcao) => {
+            const selected = tipoEntrega === opcao.id;
+            return (
+              <TouchableOpacity
+                key={opcao.id}
+                style={[styles.paymentChip, selected && styles.paymentChipSelected]}
+                onPress={() => setTipoEntrega(opcao.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+              >
+                <Ionicons name={opcao.icon} size={16} color={selected ? '#FFF' : COMPANY_COLORS.primary} />
+                <Text style={[styles.paymentLabel, selected && styles.paymentLabelSelected]}>
+                  {opcao.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={styles.paymentHint}>
+          {tipoEntrega === 'retirada'
+            ? 'Sem taxa de entrega. Você busca no endereço do fornecedor quando o pedido estiver pronto.'
+            : 'O fornecedor separa, abastece o carro e leva até o seu endereço.'}
+        </Text>
+        </View>
+        {tipoEntrega === 'entrega' ? (
         <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderBlock}>
           <Text style={styles.sectionTitle}>Endereço de entrega</Text>
@@ -233,6 +269,7 @@ export function SacolaScreen() {
           </TouchableOpacity>
         ) : null}
         </View>
+        ) : null}
         <View style={styles.sectionCard}>
         <View style={styles.sectionHeaderBlock}>
           <Text style={styles.sectionTitle}>Forma de pagamento</Text>

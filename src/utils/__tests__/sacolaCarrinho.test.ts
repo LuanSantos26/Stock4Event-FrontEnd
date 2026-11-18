@@ -6,6 +6,7 @@ import {
   estoqueDisponivel,
   removerItem,
   somarTotal,
+  unidadesNaSacola,
   type ProdutoParaSacola,
 } from '../sacolaCarrinho';
 import type { CartItem } from '../../types/marketplace';
@@ -157,5 +158,54 @@ describe('contagem e total', () => {
     expect(contarItens([])).toBe(0);
     expect(somarTotal([])).toBe(0);
     expect(encontrarItem([], 1, 1)).toBeUndefined();
+  });
+});
+
+describe('venda em palete fechado', () => {
+  const comPalete = (over: Partial<ProdutoParaSacola> = {}) =>
+    produto({ precoPalete: 120, unidadesPorPalete: 24, estoque: 100, ...over });
+
+  it('adiciona o palete com o preço do palete e separado da unidade', () => {
+    const porUnidade = adicionarItem([], comPalete(), FORNECEDOR, 3);
+    const r = adicionarItem(porUnidade.itens, comPalete(), FORNECEDOR, 2, 'palete');
+    expect(r.adicionado).toBe(true);
+    expect(r.itens).toHaveLength(2);
+    const palete = encontrarItem(r.itens, FORNECEDOR.id, 1, 'palete');
+    expect(palete?.preco).toBe(120);
+    expect(palete?.quantidade).toBe(2);
+    expect(palete?.unidade).toBe('palete (24 un.)');
+    expect(encontrarItem(r.itens, FORNECEDOR.id, 1)?.quantidade).toBe(3);
+  });
+
+  it('conta as unidades do palete no estoque, junto com as unidades soltas', () => {
+    // 100 em estoque: 3 paletes = 72, mais 30 soltas passa do estoque.
+    const paletes = adicionarItem([], comPalete(), FORNECEDOR, 3, 'palete');
+    expect(unidadesNaSacola(paletes.itens, FORNECEDOR.id, 1)).toBe(72);
+    const r = adicionarItem(paletes.itens, comPalete(), FORNECEDOR, 30);
+    expect(r.adicionado).toBe(false);
+    expect(r.motivo).toContain('28');
+  });
+
+  it('recusa palete quando o estoque não completa um palete', () => {
+    const r = adicionarItem([], comPalete({ estoque: 20 }), FORNECEDOR, 1, 'palete');
+    expect(r.adicionado).toBe(false);
+    expect(r.motivo).toContain('não completa um palete');
+  });
+
+  it('recusa palete de produto que só vende por unidade', () => {
+    const r = adicionarItem([], produto(), FORNECEDOR, 1, 'palete');
+    expect(r.adicionado).toBe(false);
+    expect(r.motivo).toContain('não é vendido em palete');
+  });
+
+  it('altera e remove só o tipo de venda indicado', () => {
+    const base = adicionarItem([], comPalete(), FORNECEDOR, 2).itens;
+    const ambos = adicionarItem(base, comPalete(), FORNECEDOR, 1, 'palete').itens;
+    const alterado = alterarQuantidade(ambos, FORNECEDOR.id, 1, 3, 'palete');
+    expect(encontrarItem(alterado, FORNECEDOR.id, 1, 'palete')?.quantidade).toBe(3);
+    expect(encontrarItem(alterado, FORNECEDOR.id, 1)?.quantidade).toBe(2);
+    const semPalete = removerItem(alterado, FORNECEDOR.id, 1, 'palete');
+    expect(semPalete).toHaveLength(1);
+    expect(semPalete[0].tipoVenda).toBeUndefined();
   });
 });

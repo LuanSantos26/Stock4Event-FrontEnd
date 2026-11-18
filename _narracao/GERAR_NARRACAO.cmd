@@ -1,0 +1,3 @@
+@echo off
+echo Gerando a narracao do video...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0gerar_narracao.ps1"

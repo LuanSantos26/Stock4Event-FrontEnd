@@ -125,7 +125,7 @@ export function ReservasScreen() {
                           </Text>
                           <TouchableOpacity
                             style={styles.trashBtn}
-                            onPress={() => removeItem(item.fornecedorId, item.produtoId)}
+                            onPress={() => removeItem(item.fornecedorId, item.produtoId, item.tipoVenda)}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
                             <Ionicons name="trash-outline" size={18} color="#9AA3B2" />
@@ -142,6 +142,7 @@ export function ReservasScreen() {
                                   item.fornecedorId,
                                   item.produtoId,
                                   item.quantidade - 1,
+                                  item.tipoVenda,
                                 )
                               }
                             >
@@ -155,6 +156,7 @@ export function ReservasScreen() {
                                   item.fornecedorId,
                                   item.produtoId,
                                   item.quantidade + 1,
+                                  item.tipoVenda,
                                 )
                               }
                             >

@@ -14,30 +14,38 @@ import { formatarPreco } from '../../services/productService';
 import { formatarDataCurta } from '../../utils/dateFormat';
 import { useHeaderTopPadding } from '../../utils/safeArea';
 import type { EtapaPedido, SolicitacaoCompra } from '../../services/marketplaceService';
+import { descreverQuantidadeItem } from '../../services/marketplaceService';
 import { chipStatus, codigoPedido, unidadesPedido } from '../Pedidos/usePedidos';
 import { styles as empresaStyles } from './styles';
 import { clientePedidoStyles as styles } from './styles';
 import { CLIENTE_COLORS } from '../../theme/theme';
 import { CancelarPedidoButton } from './components/CancelarPedidoButton';
+import { ConcluirEntregaButton } from './components/ConcluirEntregaButton';
 import { BrandLogo } from '../../components/brand/BrandLogo';
 
 const PRIMARY = CLIENTE_COLORS.primary;
 
+/** Rótulos curtos para caber no passo a passo horizontal. */
 const STEP_LABELS: Record<string, string> = {
-  recebido: 'Pedido recebido',
-  preparando: 'Preparando pedido',
-  em_rota: 'Saiu para a entrega',
-  entregue: 'Entregue',
+  pedido_efetuado: 'Confirmado',
+  em_separacao: 'Separação',
+  abastecendo: 'Abastecendo',
+  em_rota: 'Em rota',
+  pronto_retirada: 'Pronto',
 };
 
 function stepIcon(codigo: string): keyof typeof Ionicons.glyphMap {
   switch (codigo) {
-    case 'recebido':
+    case 'pedido_efetuado':
       return 'checkmark';
-    case 'preparando':
+    case 'em_separacao':
       return 'cube-outline';
-    case 'em_rota':
+    case 'abastecendo':
       return 'car-outline';
+    case 'em_rota':
+      return 'navigate-outline';
+    case 'pronto_retirada':
+      return 'storefront-outline';
     case 'entregue':
       return 'flag-outline';
     default:
@@ -53,6 +61,9 @@ interface Props {
   podeCancelar: boolean;
   cancelando: boolean;
   onCancelar: () => void;
+  podeConcluir: boolean;
+  concluindo: boolean;
+  onConcluir: () => void;
 }
 
 export function ClientePedidoDetail({
@@ -63,6 +74,9 @@ export function ClientePedidoDetail({
   podeCancelar,
   cancelando,
   onCancelar,
+  podeConcluir,
+  concluindo,
+  onConcluir,
 }: Props) {
   const topPadding = useHeaderTopPadding(8);
   const tabBarHeight = useBottomTabBarHeight();
@@ -119,7 +133,10 @@ export function ClientePedidoDetail({
 
             <View style={styles.stepper}>
               {etapas.map((etapa, index) => {
-                const label = STEP_LABELS[etapa.codigo] ?? etapa.label;
+                const label =
+                  etapa.codigo === 'entregue'
+                    ? pedido.tipoEntrega === 'retirada' ? 'Retirado' : 'Entregue'
+                    : STEP_LABELS[etapa.codigo] ?? etapa.label;
                 const done = etapa.concluida;
                 const active = etapa.ativa && !etapa.concluida;
                 return (
@@ -163,7 +180,7 @@ export function ClientePedidoDetail({
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Itens do pedido</Text>
             {pedido.itens.map((item) => (
-              <View key={item.produtoId} style={styles.itemRow}>
+              <View key={`${item.produtoId}-${item.tipoVenda ?? 'unidade'}`} style={styles.itemRow}>
                 <RemoteImage uri={item.imagemUrl} style={styles.itemImage} fallbackLabel={item.nome} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemName} numberOfLines={2}>
@@ -172,9 +189,7 @@ export function ClientePedidoDetail({
                   <Text style={styles.itemUnit}>{item.unidade}</Text>
                 </View>
                 <View>
-                  <Text style={styles.itemQty}>
-                    {item.quantidade} {item.quantidade === 1 ? 'unidade' : 'unidades'}
-                  </Text>
+                  <Text style={styles.itemQty}>{descreverQuantidadeItem(item)}</Text>
                   <Text style={styles.itemSub}>{formatarPreco(item.subtotal)}</Text>
                 </View>
               </View>
@@ -187,9 +202,11 @@ export function ClientePedidoDetail({
                 <Ionicons name="location-outline" size={18} color={PRIMARY} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.infoTitle}>Endereço de entrega</Text>
+                <Text style={styles.infoTitle}>
+                  {pedido.tipoEntrega === 'retirada' ? 'Retirar no local' : 'Endereço de entrega'}
+                </Text>
                 <Text style={styles.infoText}>
-                  {pedido.enderecoResumo || 'Endereço informado no checkout'}
+                  {(pedido.enderecoResumo || 'Endereço informado no checkout').replace(/^Retirada no local: /, '')}
                 </Text>
               </View>
             </View>
@@ -198,8 +215,10 @@ export function ClientePedidoDetail({
                 <Ionicons name="car-outline" size={18} color={PRIMARY} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.infoTitle}>Entrega</Text>
-                <Text style={styles.infoText}>Entrega padrão</Text>
+                <Text style={styles.infoTitle}>Recebimento</Text>
+                <Text style={styles.infoText}>
+                  {pedido.tipoEntrega === 'retirada' ? 'Retirada no local do fornecedor' : 'Entrega padrão'}
+                </Text>
               </View>
             </View>
             <View style={styles.totalRow}>
@@ -226,6 +245,13 @@ export function ClientePedidoDetail({
             <Text style={styles.helpText}>Precisa de ajuda?</Text>
           </TouchableOpacity>
 
+          {podeConcluir ? (
+            <ConcluirEntregaButton
+              retirada={pedido.tipoEntrega === 'retirada'}
+              onPress={onConcluir}
+              loading={concluindo}
+            />
+          ) : null}
           {podeCancelar ? <CancelarPedidoButton onPress={onCancelar} loading={cancelando} /> : null}
         </View>
       </ScrollView>
