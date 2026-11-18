@@ -10,13 +10,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BackTitleHeader } from '../../components/Header/BackTitleHeader';
-import { labelMetodoPagamento } from '../../services/marketplaceService';
+import { descreverQuantidadeItem, labelMetodoPagamento } from '../../services/marketplaceService';
 import { formatarPreco } from '../../services/productService';
 import { formatarDataCurta } from '../../utils/dateFormat';
 import { styles } from './styles';
 import { ClientePedidoDetail } from './ClientePedidoDetail';
 import { ACCENT, InfoRow, ProgressBar, TimelineStep } from './components/PedidoParts';
 import { CancelarPedidoButton } from './components/CancelarPedidoButton';
+import { ConcluirEntregaButton } from './components/ConcluirEntregaButton';
 import { usePedidoAcompanhamento } from './usePedidoAcompanhamento';
 import { COMPANY_COLORS } from '../../theme/theme';
 
@@ -43,6 +44,9 @@ export function PedidoAcompanhamentoScreen() {
     podeCancelar,
     cancelando,
     confirmarCancelamento,
+    podeConcluir,
+    concluindo,
+    confirmarConclusao,
   } = usePedidoAcompanhamento();
 
   if (loading && !pedido) {
@@ -82,6 +86,9 @@ export function PedidoAcompanhamentoScreen() {
         podeCancelar={podeCancelar}
         cancelando={cancelando}
         onCancelar={confirmarCancelamento}
+        podeConcluir={podeConcluir}
+        concluindo={concluindo}
+        onConcluir={confirmarConclusao}
       />
     );
   }
@@ -180,10 +187,16 @@ export function PedidoAcompanhamentoScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="location-outline" size={18} color={ACCENT} />
-            <Text style={styles.cardTitle}>Detalhes da entrega</Text>
+            <Text style={styles.cardTitle}>
+              {pedido.tipoEntrega === 'retirada' ? 'Retirada no local' : 'Detalhes da entrega'}
+            </Text>
           </View>
           {pedido.enderecoResumo ? (
-            <InfoRow icon="navigate-outline" label="Endereço" value={pedido.enderecoResumo} />
+            <InfoRow
+              icon={pedido.tipoEntrega === 'retirada' ? 'storefront-outline' : 'navigate-outline'}
+              label={pedido.tipoEntrega === 'retirada' ? 'Retirar em' : 'Endereço'}
+              value={pedido.enderecoResumo.replace(/^Retirada no local: /, '')}
+            />
           ) : null}
           <InfoRow
             icon="card-outline"
@@ -204,19 +217,23 @@ export function PedidoAcompanhamentoScreen() {
           </View>
           {pedido.itens.map((item, index) => (
             <View
-              key={item.produtoId}
+              key={`${item.produtoId}-${item.tipoVenda ?? 'unidade'}`}
               style={[
                 styles.itemRow,
                 index === pedido.itens.length - 1 && styles.itemRowLast,
               ]}
             >
               <View style={styles.itemBadge}>
-                <Text style={styles.itemBadgeText}>{item.quantidade}</Text>
+                <Text style={styles.itemBadgeText}>
+                  {item.tipoVenda === 'palete' && item.quantidadePaletes ? item.quantidadePaletes : item.quantidade}
+                </Text>
               </View>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemNome} numberOfLines={2}>{item.nome}</Text>
                 <Text style={styles.itemDetalhe}>
-                  {item.unidade} · {formatarPreco(item.precoUnitario)} un.
+                  {item.tipoVenda === 'palete' && item.precoPalete
+                    ? `${descreverQuantidadeItem(item)} · ${formatarPreco(item.precoPalete)} o palete`
+                    : `${item.unidade} · ${formatarPreco(item.precoUnitario)} un.`}
                 </Text>
               </View>
               <Text style={styles.itemSubtotal}>{formatarPreco(item.subtotal)}</Text>
@@ -253,6 +270,13 @@ export function PedidoAcompanhamentoScreen() {
             <Text style={styles.primaryButtonText}>Continuar comprando</Text>
           </TouchableOpacity>
         </View>
+        {podeConcluir ? (
+          <ConcluirEntregaButton
+            retirada={pedido.tipoEntrega === 'retirada'}
+            onPress={confirmarConclusao}
+            loading={concluindo}
+          />
+        ) : null}
         {podeCancelar ? (
           <CancelarPedidoButton onPress={confirmarCancelamento} loading={cancelando} />
         ) : null}

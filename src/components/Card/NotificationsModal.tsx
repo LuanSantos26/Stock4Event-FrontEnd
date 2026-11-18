@@ -16,7 +16,9 @@ import {
   iconeTipoNotificacao,
   labelTipoNotificacao,
   listarNotificacoes,
+  perfilDasNotificacoes,
 } from '../../services/notificacaoService';
+import { useAuth } from '../../context/AuthContext';
 import { formatarDataHora } from '../../utils/dateFormat';
 import {
   contarNaoLidas,
@@ -39,6 +41,8 @@ export function NotificationsModal({
   onUnreadChange,
 }: NotificationsModalProps) {
   const navigation = useNavigation<any>();
+  const { perfilUso } = useAuth();
+  const perfil = perfilDasNotificacoes(perfilUso);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [lidas, setLidas] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -58,7 +62,7 @@ export function NotificationsModal({
     setError('');
     try {
       const [lista, lidasSet] = await Promise.all([
-        listarNotificacoes(empresaId),
+        listarNotificacoes(empresaId, perfil),
         obterNotificacoesLidas(empresaId),
       ]);
       setNotificacoes(lista);
@@ -69,7 +73,7 @@ export function NotificationsModal({
     } finally {
       setLoading(false);
     }
-  }, [atualizarNaoLidas, empresaId]);
+  }, [atualizarNaoLidas, empresaId, perfil]);
 
   useEffect(() => {
     if (visible) carregar();
@@ -86,12 +90,15 @@ export function NotificationsModal({
 
     onClose();
 
-    if (notificacao.tipo === 'compra') {
-      const entregaConcluida =
-        notificacao.titulo === 'Entrega concluída' ||
-        /entregue com sucesso/i.test(notificacao.mensagem ?? '');
+    if (notificacao.tipo === 'pedido') {
+      // Fornecedor: abre os pedidos recebidos, onde ele avança as etapas.
+      navigation.navigate('EmpresaVendas');
+      return;
+    }
 
-      if (entregaConcluida && notificacao.solicitacaoId) {
+    if (notificacao.tipo === 'compra') {
+      // Abre o acompanhamento: é lá que o cliente toca em "Concluir entrega".
+      if (notificacao.solicitacaoId) {
         navigation.navigate('PedidoAcompanhamento', {
           pedidoId: notificacao.solicitacaoId,
         });
@@ -156,7 +163,7 @@ export function NotificationsModal({
                 const naoLida = !lidas.has(notificacao.id);
                 const iconName = iconeTipoNotificacao(notificacao.tipo) as keyof typeof Ionicons.glyphMap;
                 const iconBg =
-                  notificacao.tipo === 'compra'
+                  notificacao.tipo === 'compra' || notificacao.tipo === 'pedido'
                     ? styles.iconCompra
                     : notificacao.tipo === 'promocao'
                       ? styles.iconPromocao

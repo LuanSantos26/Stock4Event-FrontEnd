@@ -28,6 +28,7 @@ export type RootStackParamList = {
   ProductDetail: { produtoId: number; fornecedorId: number; fornecedorNome: string; productName: string; price: string; descricao?: string; imagemUrl?: string; unidade?: string; precoVenda?: number; estoque?: number; codigo?: string; origem?: 'catalogo' | 'marketplace'; fornecedorDescricao?: string; fornecedorLogoUrl?: string; fornecedorTipo?: string };
   EmpresaVendas: undefined;
   EmpresaGraficos: undefined;
+  Relatorios: undefined;
   Camioneiros: undefined;
   CadastroCamioneiros: undefined;
   Logistica: undefined;
@@ -35,5 +36,5 @@ export type RootStackParamList = {
   ClienteQuiosqueForm: { quiosqueId?: number } | undefined;
   Pdv: undefined;
   QuiosquesDisponiveis: undefined;
-  ExplorarLista: { tipo: 'produtos' | 'distribuidoras'; categoria?: 'aguas' | 'refrigerantes' | 'sucos' | 'cervejas' | null };
+  ExplorarLista: { tipo: 'produtos' | 'distribuidoras'; categoria?: 'aguas' | 'refrigerantes' | 'sucos' | 'cervejas' | 'vinhos' | 'destilados' | null };
 };

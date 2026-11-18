@@ -25,6 +25,10 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COMPANY_COLORS.primary,
   },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 6,
+  },
   headerButtonText: {
     color: COMPANY_COLORS.primary,
     fontWeight: '700',
@@ -199,6 +203,22 @@ export const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  aguardandoCliente: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF6DE',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  aguardandoClienteText: {
+    flex: 1,
+    color: '#8A5A00',
+    fontWeight: '600',
+    fontSize: 12,
   },
   actionSecondary: {
     borderWidth: 1,

@@ -36,6 +36,10 @@ function normalizeStoredCart(raw: LegacyStoredPurchaseCart): StoredPurchaseCart 
         quantidade: Number(item.quantidade ?? 1),
         imagemUrl: item.imagemUrl,
       };
+      if (item.tipoVenda === 'palete' && item.unidadesPorPalete) {
+        normalizedItem.tipoVenda = 'palete';
+        normalizedItem.unidadesPorPalete = Number(item.unidadesPorPalete);
+      }
 
       return normalizedItem;
     })
@@ -75,6 +79,8 @@ export async function clearPurchaseCart(empresaId: number): Promise<void> {
   await AsyncStorage.removeItem(storageKey(empresaId));
 }
 
-export function cartItemKey(item: Pick<CartItem, 'fornecedorId' | 'produtoId'>): string {
-  return `${item.fornecedorId}-${item.produtoId}`;
+export function cartItemKey(
+  item: Pick<CartItem, 'fornecedorId' | 'produtoId'> & Pick<Partial<CartItem>, 'tipoVenda'>,
+): string {
+  return `${item.fornecedorId}-${item.produtoId}-${item.tipoVenda === 'palete' ? 'palete' : 'unidade'}`;
 }

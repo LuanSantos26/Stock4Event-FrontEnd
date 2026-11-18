@@ -10,6 +10,8 @@ export function normalizarProduto(data: Produto): Produto {
     precoVenda: Number(data.precoVenda),
     estoque: normalizarEstoque(data.estoque),
     ativo: Number(data.ativo ?? 1),
+    precoPalete: data.precoPalete != null ? Number(data.precoPalete) : null,
+    unidadesPorPalete: data.unidadesPorPalete != null ? Number(data.unidadesPorPalete) : null,
   };
 }
 

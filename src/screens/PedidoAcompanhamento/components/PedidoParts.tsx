@@ -12,20 +12,26 @@ export const POLL_INTERVAL_MS = 5000;
 
 /** Fallback só para o primeiro render; o backend manda as etapas de verdade. */
 export const ETAPAS_PADRAO: EtapaPedido[] = [
-  { codigo: 'recebido', label: 'Pedido recebido', ordem: 1, concluida: false, ativa: true },
-  { codigo: 'preparando', label: 'Preparando pedido', ordem: 2, concluida: false, ativa: false },
-  { codigo: 'em_rota', label: 'Pedido saiu para a entrega', ordem: 3, concluida: false, ativa: false },
-  { codigo: 'entregue', label: 'Entregue', ordem: 4, concluida: false, ativa: false },
+  { codigo: 'pedido_efetuado', label: 'Pedido confirmado', ordem: 1, concluida: true, ativa: false },
+  { codigo: 'em_separacao', label: 'Produto em separação', ordem: 2, concluida: false, ativa: true },
+  { codigo: 'abastecendo', label: 'Abastecendo o carro', ordem: 3, concluida: false, ativa: false },
+  { codigo: 'em_rota', label: 'A caminho / em rota', ordem: 4, concluida: false, ativa: false },
+  { codigo: 'entregue', label: 'Entrega concluída', ordem: 5, concluida: false, ativa: false },
 ];
 
-function iconeEtapa(codigo: string): keyof typeof Ionicons.glyphMap {
+export function iconeEtapa(codigo: string): keyof typeof Ionicons.glyphMap {
   switch (codigo) {
-    case 'recebido':
+    case 'pedido_efetuado':
+    case 'aguardando_liberacao':
       return 'receipt-outline';
-    case 'preparando':
+    case 'em_separacao':
       return 'cube-outline';
+    case 'abastecendo':
+      return 'car-outline';
     case 'em_rota':
-      return 'bicycle-outline';
+      return 'navigate-outline';
+    case 'pronto_retirada':
+      return 'storefront-outline';
     case 'entregue':
       return 'checkmark-done-outline';
     default:
@@ -35,12 +41,17 @@ function iconeEtapa(codigo: string): keyof typeof Ionicons.glyphMap {
 
 function hintEtapa(codigo: string): string {
   switch (codigo) {
-    case 'recebido':
+    case 'pedido_efetuado':
+    case 'aguardando_liberacao':
       return 'A distribuidora recebeu seu pedido.';
-    case 'preparando':
+    case 'em_separacao':
       return 'A distribuidora está separando seus produtos.';
+    case 'abastecendo':
+      return 'Os produtos estão sendo colocados no carro de entrega.';
     case 'em_rota':
-      return 'O entregador está a caminho do seu endereço.';
+      return 'O carro está a caminho do seu endereço.';
+    case 'pronto_retirada':
+      return 'Já pode buscar no endereço da distribuidora.';
     case 'entregue':
       return 'Produtos creditados ao seu estoque.';
     default:

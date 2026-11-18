@@ -21,6 +21,7 @@ import {
   salvarEnderecoSelecionado,
 } from '../../services/enderecoService';
 import { CheckoutPaymentResult, RecebedorCheckout } from '../../components/Card/CheckoutPaymentModal';
+import type { TipoEntrega } from '../../types/marketplace';
 import { useTabBarScrollPadding } from '../../components/layout/BottomTabBar';
 
 /** Opções do checkout. "Cartão" abre a escolha entre crédito e débito no modal de pagamento. */
@@ -60,6 +61,9 @@ export function useSacola() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [modalPagamento, setModalPagamento] = useState(false);
+  /** Retirada no local não cobra taxa e não precisa de endereço do comprador. */
+  const [tipoEntrega, setTipoEntrega] = useState<TipoEntrega>('entrega');
+  const taxaPorPedido = tipoEntrega === 'retirada' ? 0 : TAXA_ENTREGA;
 
   const carregarEnderecos = useCallback(async () => {
     if (!user?.empresa?.id) return;
@@ -162,7 +166,7 @@ export function useSacola() {
       setError('Carrinho inválido. Adicione produtos antes de finalizar.');
       return;
     }
-    if (!enderecoSelecionado) {
+    if (tipoEntrega === 'entrega' && !enderecoSelecionado) {
       setError('Cadastre ou selecione um endereço de entrega.');
       return;
     }
@@ -176,7 +180,8 @@ export function useSacola() {
     setModalPagamento(false);
     setError('');
     setSuccessMessage('');
-    if (!user?.empresa?.id || !user.id || !enderecoSelecionado) return;
+    if (!user?.empresa?.id || !user.id) return;
+    if (tipoEntrega === 'entrega' && !enderecoSelecionado) return;
     setLoading(true);
     const falhas: string[] = [];
     const pedidosCriados: SolicitacaoCompra[] = [];
@@ -188,8 +193,9 @@ export function useSacola() {
             empresaFornecedoraId: grupo.fornecedorId,
             usuarioId: user.id,
             metodoPagamento: pagamento.metodoPagamento,
-            enderecoEntregaId: enderecoSelecionado.id,
-            taxaEntrega: TAXA_ENTREGA,
+            tipoEntrega,
+            enderecoEntregaId: tipoEntrega === 'entrega' ? enderecoSelecionado?.id : undefined,
+            taxaEntrega: taxaPorPedido,
             pagamentoReferencia:
               pagamento.porFornecedor?.[grupo.fornecedorId]?.pagamentoReferencia ?? pagamento.pagamentoReferencia,
             pagamentoDetalhes:
@@ -197,6 +203,7 @@ export function useSacola() {
             itens: grupo.itens.map((item) => ({
               produtoId: item.produtoId,
               quantidade: item.quantidade,
+              tipoVenda: item.tipoVenda === 'palete' ? 'palete' : 'unidade',
             })),
           });
           pedidosCriados.push(pedido);
@@ -227,21 +234,26 @@ export function useSacola() {
     }
   };
 
-  const totalComTaxa = total + (itemCount > 0 ? taxaEntregaTotal : 0);
+  const taxaEntregaEfetiva = tipoEntrega === 'retirada' ? 0 : taxaEntregaTotal;
+  const totalComTaxa = total + (itemCount > 0 ? taxaEntregaEfetiva : 0);
   // Cada fornecedor recebe o próprio subtotal mais a taxa de entrega do pedido dele.
   const recebedores = useMemo<RecebedorCheckout[]>(
     () =>
       gruposFornecedor.map((g) => ({
         fornecedorId: g.fornecedorId,
         fornecedorNome: g.fornecedorNome,
-        valor: g.subtotal + TAXA_ENTREGA,
+        valor: g.subtotal + taxaPorPedido,
       })),
-    [gruposFornecedor],
+    [gruposFornecedor, taxaPorPedido],
   );
   const sacolaVazia = itemCount === 0;
   const pedidoCount = gruposFornecedor.length;
   const taxaEntregaLabel =
-    pedidoCount > 1 ? `Taxa de entrega (${pedidoCount} pedidos)` : 'Taxa de entrega';
+    tipoEntrega === 'retirada'
+      ? 'Retirada no local'
+      : pedidoCount > 1
+        ? `Taxa de entrega (${pedidoCount} pedidos)`
+        : 'Taxa de entrega';
 
   return {
     navigation,
@@ -252,7 +264,7 @@ export function useSacola() {
     recebedores,
     itemCount,
     total,
-    taxaEntregaTotal,
+    taxaEntregaTotal: taxaEntregaEfetiva,
     updateQuantity,
     removeItem,
     editMode,
@@ -288,5 +300,7 @@ export function useSacola() {
     sacolaVazia,
     pedidoCount,
     taxaEntregaLabel,
+    tipoEntrega,
+    setTipoEntrega,
   };
 }

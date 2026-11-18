@@ -8,7 +8,9 @@ import {
   labelEstoque,
   normalizarEstoque,
 } from '../../services/productService';
-import { listarProdutosFornecedor } from '../../services/marketplaceService';
+import { listarProdutosFornecedor, vendePorPalete } from '../../services/marketplaceService';
+import { unidadesNaSacola } from '../../utils/sacolaCarrinho';
+import type { TipoVenda } from '../../types/marketplace';
 
 import { useAuth } from '../../context/AuthContext';
 
@@ -39,6 +41,10 @@ export function useProductDetail() {
   const [precoVenda, setPrecoVenda] = useState(Number(route.params?.precoVenda ?? 0));
   const [estoque, setEstoque] = useState(normalizarEstoque(route.params?.estoque));
   const [productCodigo, setProductCodigo] = useState(route.params?.codigo as string | undefined);
+  const [precoPalete, setPrecoPalete] = useState<number | null>(null);
+  const [unidadesPorPalete, setUnidadesPorPalete] = useState<number | null>(null);
+  /** O cliente escolhe comprar por unidade ou em palete fechado (quando o fornecedor oferece). */
+  const [tipoVenda, setTipoVendaState] = useState<TipoVenda>('unidade');
   const [loading, setLoading] = useState(false);
 
   const [quantity, setQuantity] = useState(1);
@@ -46,18 +52,30 @@ export function useProductDetail() {
   const [feedback, setFeedback] = useState('');
   const [adding, setAdding] = useState(false);
 
+  // Unidades desse produto já na sacola, somando as vendidas por unidade e por palete.
   const qtdNoCarrinho = useMemo(
-    () =>
-      itens.find(
-        (item) => item.fornecedorId === fornecedorId && item.produtoId === produtoId,
-      )?.quantidade ?? 0,
+    () => unidadesNaSacola(itens, fornecedorId, produtoId),
     [itens, fornecedorId, produtoId],
   );
+
+  const temPalete = vendePorPalete({ precoPalete, unidadesPorPalete });
+  const porPalete = temPalete && tipoVenda === 'palete';
+  const fator = porPalete ? (unidadesPorPalete as number) : 1;
+  /** Preço do que o cliente está comprando agora: uma unidade ou um palete. */
+  const precoSelecionado = porPalete ? (precoPalete as number) : precoVenda;
 
   const estoqueRestante = isCatalogo
     ? estoque
     : Math.max(0, estoque - qtdNoCarrinho);
-  const esgotado = estoqueRestante <= 0;
+  /** Quantas unidades ou paletes ainda cabem no estoque. */
+  const maximoSelecionavel = Math.floor(estoqueRestante / fator);
+  const esgotado = porPalete ? maximoSelecionavel <= 0 : estoqueRestante <= 0;
+
+  const setTipoVenda = useCallback((tipo: TipoVenda) => {
+    setTipoVendaState(tipo);
+    setQuantity(1);
+    setFeedback('');
+  }, []);
   const estoqueLabel = labelEstoque(isCatalogo ? estoque : estoqueRestante);
   const estoqueColor = corEstoque(isCatalogo ? estoque : estoqueRestante);
 
@@ -74,6 +92,8 @@ export function useProductDetail() {
         setPrecoVenda(produto.precoVenda);
         setEstoque(normalizarEstoque(produto.estoque));
         setProductCodigo(produto.codigo);
+        setPrecoPalete(produto.precoPalete ?? null);
+        setUnidadesPorPalete(produto.unidadesPorPalete ?? null);
         return;
       }
 
@@ -88,6 +108,8 @@ export function useProductDetail() {
         setPrecoVenda(produto.precoVenda);
         setEstoque(normalizarEstoque(produto.estoque));
         setProductCodigo(produto.codigo);
+        setPrecoPalete(produto.precoPalete ?? null);
+        setUnidadesPorPalete(produto.unidadesPorPalete ?? null);
       }
     } finally {
       setLoading(false);
@@ -112,12 +134,20 @@ export function useProductDetail() {
     }
 
     if (esgotado) {
-      setFeedback('Produto esgotado no momento.');
+      setFeedback(
+        porPalete
+          ? `O estoque não completa um palete (${estoqueRestante} un. disponíveis).`
+          : 'Produto esgotado no momento.',
+      );
       return;
     }
 
-    if (quantity > estoqueRestante) {
-      setFeedback(`Apenas ${estoqueRestante} unidade(s) disponível(is).`);
+    if (quantity > maximoSelecionavel) {
+      setFeedback(
+        porPalete
+          ? `Cabem no máximo ${maximoSelecionavel} palete(s).`
+          : `Apenas ${estoqueRestante} unidade(s) disponível(is).`,
+      );
       return;
     }
 
@@ -134,10 +164,14 @@ export function useProductDetail() {
         descricao,
         imagemUrl,
         ativo: 1,
-        estoque: estoqueRestante,
+        // Estoque total: a sacola já desconta o que estiver nela.
+        estoque,
+        precoPalete,
+        unidadesPorPalete,
       },
       { id: fornecedorId, nome: fornecedorNome },
       quantity,
+      porPalete ? 'palete' : 'unidade',
     );
 
     setAdding(false);
@@ -163,6 +197,13 @@ export function useProductDetail() {
     imagemUrl,
     unidade,
     precoVenda,
+    precoPalete,
+    unidadesPorPalete,
+    temPalete,
+    tipoVenda: porPalete ? ('palete' as TipoVenda) : ('unidade' as TipoVenda),
+    setTipoVenda,
+    precoSelecionado,
+    maximoSelecionavel,
     productCodigo,
     loading,
     quantity,

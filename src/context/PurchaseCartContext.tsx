@@ -21,6 +21,7 @@ import {
   alterarQuantidade,
   removerItem,
 } from '../utils/sacolaCarrinho';
+import type { TipoVenda } from '../types/marketplace';
 
 export type { CartItem };
 
@@ -56,9 +57,15 @@ interface PurchaseCartContextValue {
     produto: Produto,
     fornecedor: FornecedorRef,
     quantidade?: number,
+    tipoVenda?: TipoVenda,
   ) => Promise<ResultadoAdicao>;
-  updateQuantity: (fornecedorId: number, produtoId: number, quantidade: number) => void;
-  removeItem: (fornecedorId: number, produtoId: number) => void;
+  updateQuantity: (
+    fornecedorId: number,
+    produtoId: number,
+    quantidade: number,
+    tipoVenda?: TipoVenda,
+  ) => void;
+  removeItem: (fornecedorId: number, produtoId: number, tipoVenda?: TipoVenda) => void;
   clear: () => void;
 }
 
@@ -147,7 +154,12 @@ export function PurchaseCartProvider({ children }: { children: React.ReactNode }
   }, [itens]);
 
   const addItem = useCallback(
-    async (produto: Produto, fornecedor: FornecedorRef, quantidade = 1) => {
+    async (
+      produto: Produto,
+      fornecedor: FornecedorRef,
+      quantidade = 1,
+      tipoVenda: TipoVenda = 'unidade',
+    ) => {
       const resultado = adicionarItem(
         itensRef.current,
         {
@@ -157,9 +169,12 @@ export function PurchaseCartProvider({ children }: { children: React.ReactNode }
           unidade: produto.unidade,
           imagemUrl: produto.imagemUrl,
           estoque: produto.estoque,
+          precoPalete: produto.precoPalete,
+          unidadesPorPalete: produto.unidadesPorPalete,
         },
         fornecedor,
         quantidade,
+        tipoVenda,
       );
 
       if (resultado.adicionado) {
@@ -173,15 +188,18 @@ export function PurchaseCartProvider({ children }: { children: React.ReactNode }
   );
 
   const updateQuantity = useCallback(
-    (fornecedorId: number, produtoId: number, quantidade: number) => {
-      setItens((prev) => alterarQuantidade(prev, fornecedorId, produtoId, quantidade));
+    (fornecedorId: number, produtoId: number, quantidade: number, tipoVenda: TipoVenda = 'unidade') => {
+      setItens((prev) => alterarQuantidade(prev, fornecedorId, produtoId, quantidade, tipoVenda));
     },
     [],
   );
 
-  const removeItem = useCallback((fornecedorId: number, produtoId: number) => {
-    setItens((prev) => removerItem(prev, fornecedorId, produtoId));
-  }, []);
+  const removeItem = useCallback(
+    (fornecedorId: number, produtoId: number, tipoVenda: TipoVenda = 'unidade') => {
+      setItens((prev) => removerItem(prev, fornecedorId, produtoId, tipoVenda));
+    },
+    [],
+  );
 
   const gruposFornecedor = useMemo(() => buildGruposFornecedor(itens), [itens]);
 

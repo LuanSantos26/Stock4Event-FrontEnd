@@ -10,12 +10,12 @@ import {
 import { formatarPreco, Produto, normalizarEstoque } from '../../services/productService';
 import { useBottomTabBarHeight } from '../../components/layout/BottomTabBar';
 
-export type CategoriaId = 'aguas' | 'refrigerantes' | 'sucos' | 'cervejas';
+export type CategoriaId = 'aguas' | 'refrigerantes' | 'sucos' | 'cervejas' | 'vinhos' | 'destilados';
 
 export const CATEGORIAS: {
   id: CategoriaId;
   label: string;
-  icon: 'water-outline' | 'beer-outline' | 'wine-outline' | 'pint-outline';
+  icon: 'water-outline' | 'beer-outline' | 'wine-outline' | 'pint-outline' | 'nutrition-outline' | 'flask-outline';
   color: string;
   keywords: string[];
 }[] = [
@@ -24,7 +24,8 @@ export const CATEGORIAS: {
     label: 'Águas',
     icon: 'water-outline',
     color: '#D8EEF8',
-    keywords: ['água', 'agua', 'mineral', 'sem gás', 'com gás', 'cristal'],
+    // Sem 'agua' solto: casava com marcas como Maguary (suco). 'mineral' cobre "agua mineral" sem acento.
+    keywords: ['água', 'agua mineral', 'mineral', 'sem gás', 'com gás', 'cristal', 'galão'],
   },
   {
     id: 'refrigerantes',
@@ -36,7 +37,7 @@ export const CATEGORIAS: {
   {
     id: 'sucos',
     label: 'Sucos',
-    icon: 'wine-outline',
+    icon: 'nutrition-outline',
     color: '#F8E7B0',
     // Só termos de suco: 'laranja' sozinho colocava a Fanta Laranja (SaborViva) em Sucos.
     keywords: ['suco', 'néctar', 'nectar'],
@@ -47,6 +48,20 @@ export const CATEGORIAS: {
     icon: 'beer-outline',
     color: '#D8F0D4',
     keywords: ['cerveja', 'beer', 'pilsen', 'lager', 'ipa', 'chopp'],
+  },
+  {
+    id: 'vinhos',
+    label: 'Vinhos',
+    icon: 'wine-outline',
+    color: '#EBD5E0',
+    keywords: ['vinho', 'espumante', 'wine'],
+  },
+  {
+    id: 'destilados',
+    label: 'Destilados',
+    icon: 'flask-outline',
+    color: '#E6DFD3',
+    keywords: ['whisky', 'conhaque', 'vodka', 'cachaça', 'cachaca', 'licor'],
   },
 ];
 

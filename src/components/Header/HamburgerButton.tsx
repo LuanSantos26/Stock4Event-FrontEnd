@@ -94,6 +94,14 @@ export function HamburgerButton() {
 
                   <TouchableOpacity
                     style={styles.menuOption}
+                    onPress={() => handleNavigate('Relatorios')}
+                  >
+                    <Feather name="file-text" size={20} color={COMPANY_COLORS.primary} />
+                    <Text style={styles.menuOptionText}>Relatórios</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.menuOption}
                     onPress={() => handleNavigate('Enderecos')}
                   >
                     <Feather name="map-pin" size={20} color={COMPANY_COLORS.primary} />

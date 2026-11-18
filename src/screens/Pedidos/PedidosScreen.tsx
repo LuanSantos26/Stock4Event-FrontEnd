@@ -16,6 +16,7 @@ import {
   usePedidos,
 } from './usePedidos';
 import { BrandLogo } from '../../components/brand/BrandLogo';
+import { useNavigation } from '@react-navigation/native';
 
 const ABAS: { key: AbaPedidos; label: string }[] = [
   { key: 'realizados', label: 'Realizados' },
@@ -38,6 +39,7 @@ function chipStyle(tone: ReturnType<typeof chipStatus>['tone']) {
 
 export function PedidosScreen() {
   const { user } = useAuth();
+  const navigation = useNavigation<any>();
   const topPadding = useHeaderTopPadding(8);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const {
@@ -70,6 +72,24 @@ export function PedidosScreen() {
           </View>
           <Text style={styles.title}>Histórico de pedidos</Text>
           <Text style={styles.subtitle}>Consulte seus pedidos realizados.</Text>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              alignSelf: 'flex-start',
+              gap: 6,
+              marginTop: 10,
+              backgroundColor: 'rgba(255,255,255,0.18)',
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+            }}
+            onPress={() => navigation.navigate('Relatorios')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="document-text-outline" size={16} color="#FFF" />
+            <Text style={{ color: '#FFF', fontWeight: '700', fontSize: 13 }}>Relatórios para baixar</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.sheet}>

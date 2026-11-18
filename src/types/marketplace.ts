@@ -10,14 +10,26 @@ export interface Fornecedor {
   capaUrl?: string;
 }
 
+/** Como o item foi vendido: por unidade ou em palete fechado. */
+export type TipoVenda = 'unidade' | 'palete';
+
+/** Entrega no endereço do comprador ou retirada no local do fornecedor. */
+export type TipoEntrega = 'entrega' | 'retirada';
+
 export interface ItemSolicitacao {
   produtoId: number;
   nome: string;
   unidade: string;
+  /** Sempre em unidades (é o que sai do estoque). */
   quantidade: number;
   precoUnitario: number;
   subtotal: number;
   imagemUrl?: string;
+  tipoVenda?: TipoVenda;
+  /** Quantos paletes, quando tipoVenda = 'palete'. */
+  quantidadePaletes?: number | null;
+  precoPalete?: number | null;
+  unidadesPorPalete?: number | null;
 }
 
 export interface EtapaPedido {
@@ -43,6 +55,7 @@ export interface SolicitacaoCompra {
   metodoPagamento?: string;
   enderecoResumo?: string;
   taxaEntrega?: number;
+  tipoEntrega?: TipoEntrega;
   criadoEm: string;
   itens: ItemSolicitacao[];
   previsaoEntregaMinutos?: number;
@@ -51,7 +64,9 @@ export interface SolicitacaoCompra {
 
 export interface ItemSolicitacaoPayload {
   produtoId: number;
+  /** Em unidades, ou em número de paletes quando tipoVenda = 'palete'. */
   quantidade: number;
+  tipoVenda?: TipoVenda;
 }
 
 export interface SolicitacaoCompraPayload {
@@ -60,7 +75,9 @@ export interface SolicitacaoCompraPayload {
   usuarioId: number;
   observacao?: string;
   metodoPagamento: MetodoPagamento;
-  enderecoEntregaId: number;
+  /** Obrigatório na entrega; na retirada fica vazio. */
+  enderecoEntregaId?: number;
+  tipoEntrega?: TipoEntrega;
   taxaEntrega?: number;
   pagamentoReferencia?: string;
   pagamentoDetalhes?: string;
@@ -76,6 +93,10 @@ export interface CartItem {
   unidade: string;
   quantidade: number;
   imagemUrl?: string;
+  /** 'palete': `preco` é o preço do palete e `quantidade` conta paletes. */
+  tipoVenda?: TipoVenda;
+  /** Unidades em um palete (só em itens por palete). */
+  unidadesPorPalete?: number;
 }
 
 export interface StoredPurchaseCart {
@@ -94,6 +115,8 @@ export interface ProdutoRecente {
   ativo: number;
   estoque?: number;
   codigo?: string;
+  precoPalete?: number | null;
+  unidadesPorPalete?: number | null;
   fornecedorNome: string;
   fornecedorLogoUrl?: string | null;
   fornecedorCapaUrl?: string | null;

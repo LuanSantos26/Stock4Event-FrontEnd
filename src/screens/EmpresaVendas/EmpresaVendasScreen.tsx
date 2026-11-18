@@ -14,26 +14,29 @@ import { ScreenHeader } from '../../components/Header/ScreenHeader';
 import { styles } from './styles';
 import { BottomTabBar } from '../../components/layout/BottomTabBar';
 import { useAuth } from '../../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 import {
   SolicitacaoCompra,
   StatusPedidoFornecedor,
+  aguardandoConclusaoCliente,
   atualizarStatusSolicitacao,
+  descreverQuantidadeItem,
+  labelAcaoFornecedor,
   labelStatusPedido,
   listarSolicitacoesRecebidas,
+  proximaEtapaFornecedor,
 } from '../../services/marketplaceService';
 import { formatarPreco } from '../../services/productService';
+import { iconeEtapa } from '../PedidoAcompanhamento/components/PedidoParts';
 
-const STATUS_ANDAMENTO = ['recebido', 'preparando', 'em_rota'];
-
-/**
- * Próxima etapa que o fornecedor aciona à mão, e o texto do botão.
- * 'entregue' e 'cancelada' encerram o pedido, então não têm sucessor.
- */
-const PROXIMA_ETAPA: Record<string, { status: StatusPedidoFornecedor; label: string }> = {
-  recebido: { status: 'preparando', label: 'Preparar pedido' },
-  preparando: { status: 'em_rota', label: 'Despachar' },
-  em_rota: { status: 'entregue', label: 'Confirmar entrega' },
-};
+/** Pedidos que ainda não terminaram (nem entregues/retirados, nem cancelados). */
+const STATUS_ANDAMENTO = [
+  'aguardando_liberacao',
+  'em_separacao',
+  'abastecendo',
+  'em_rota',
+  'pronto_retirada',
+];
 
 function mesmoDia(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -51,8 +54,10 @@ function formatarHora(value: string): string {
 
 function estiloStatus(status: string) {
   switch (status) {
-    case 'preparando':
+    case 'em_separacao':
+    case 'abastecendo':
     case 'em_rota':
+    case 'pronto_retirada':
       return { pill: styles.statusPillRota, text: styles.statusTextRota };
     case 'entregue':
       return { pill: styles.statusPillEntregue, text: styles.statusTextEntregue };
@@ -136,12 +141,31 @@ export function EmpresaVendasScreen() {
     if (atualizandoId === pedido.id) {
       return <ActivityIndicator style={styles.actionLoader} />;
     }
-    const proximo = PROXIMA_ETAPA[pedido.status];
+    const retirada = pedido.tipoEntrega === 'retirada';
+    if (aguardandoConclusaoCliente(pedido)) {
+      // O último passo é do cliente: o fornecedor só acompanha (ou cancela).
+      return (
+        <View style={styles.actionRow}>
+          <View style={styles.aguardandoCliente}>
+            <Ionicons name="hourglass-outline" size={15} color="#8A5A00" />
+            <Text style={styles.aguardandoClienteText}>
+              {retirada
+                ? 'Aguardando o cliente retirar e concluir'
+                : 'Aguardando o cliente confirmar o recebimento'}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.actionSecondary} onPress={() => confirmarCancelamento(pedido)}>
+            <Text style={styles.actionSecondaryText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    const proximo = proximaEtapaFornecedor(pedido);
     if (!proximo) return null;
     return (
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionPrimary} onPress={() => mudarStatus(pedido, proximo.status)}>
-          <Text style={styles.actionPrimaryText}>{proximo.label}</Text>
+        <TouchableOpacity style={styles.actionPrimary} onPress={() => mudarStatus(pedido, proximo)}>
+          <Text style={styles.actionPrimaryText}>{labelAcaoFornecedor(proximo, retirada)}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionSecondary} onPress={() => confirmarCancelamento(pedido)}>
           <Text style={styles.actionSecondaryText}>Cancelar</Text>
@@ -173,9 +197,14 @@ export function EmpresaVendasScreen() {
           inset={16}
           style={{ marginBottom: 16 }}
           rightSlot={
-            <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('EmpresaGraficos')}>
-              <Text style={styles.headerButtonText}>Gráficos</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('Relatorios')}>
+                <Text style={styles.headerButtonText}>Relatórios</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerButton} onPress={() => navigation.navigate('EmpresaGraficos')}>
+                <Text style={styles.headerButtonText}>Gráficos</Text>
+              </TouchableOpacity>
+            </View>
           }
         />
         {/* Métricas */}
@@ -217,16 +246,62 @@ export function EmpresaVendasScreen() {
                       <Text style={styles.saleMeta}>
                         Pedido #{pedido.id} • {formatarHora(pedido.criadoEm)} • {pedido.itens.length} item(ns)
                       </Text>
+                      <View style={styles.entregaTag}>
+                        <Ionicons
+                          name={pedido.tipoEntrega === 'retirada' ? 'storefront-outline' : 'bicycle-outline'}
+                          size={12}
+                          color="#4A5568"
+                        />
+                        <Text style={styles.entregaTagText}>
+                          {pedido.tipoEntrega === 'retirada' ? 'Retirada no local' : 'Entrega'}
+                        </Text>
+                      </View>
                     </View>
                     <View style={styles.saleRight}>
                       <Text style={styles.saleValue}>{formatarPreco(pedido.valorTotal)}</Text>
                       <View style={[styles.statusPill, status.pill]}>
                         <Text style={[styles.statusText, status.text]}>
-                          {pedido.statusLabel ?? labelStatusPedido(pedido.status)}
+                          {pedido.statusLabel ?? labelStatusPedido(pedido.status, pedido.tipoEntrega)}
                         </Text>
                       </View>
                     </View>
                   </View>
+                  {pedido.itens.length > 0 ? (
+                    <View style={styles.itensBox}>
+                      {pedido.itens.map((item) => (
+                        <Text key={`${item.produtoId}-${item.tipoVenda ?? 'unidade'}`} style={styles.itemLinha}>
+                          {descreverQuantidadeItem(item)} · {item.nome}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
+                  {pedido.status !== 'cancelada' && pedido.etapas?.length ? (
+                    <View style={styles.etapasRow} accessibilityLabel={`Etapa atual: ${pedido.statusLabel ?? ''}`}>
+                      {pedido.etapas.map((etapa, index) => {
+                        const ativa = etapa.ativa && !etapa.concluida;
+                        return (
+                          <React.Fragment key={etapa.codigo}>
+                            {index > 0 ? (
+                              <View style={[styles.etapaLinha, etapa.concluida || ativa ? styles.etapaLinhaFeita : null]} />
+                            ) : null}
+                            <View
+                              style={[
+                                styles.etapaBolinha,
+                                etapa.concluida && styles.etapaBolinhaFeita,
+                                ativa && styles.etapaBolinhaAtiva,
+                              ]}
+                            >
+                              <Ionicons
+                                name={etapa.concluida ? 'checkmark' : iconeEtapa(etapa.codigo)}
+                                size={12}
+                                color={etapa.concluida || ativa ? '#FFF' : '#9AA3B2'}
+                              />
+                            </View>
+                          </React.Fragment>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                   {renderAcoes(pedido)}
                 </View>
               );

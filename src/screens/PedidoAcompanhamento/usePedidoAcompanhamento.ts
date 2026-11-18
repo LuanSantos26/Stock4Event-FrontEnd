@@ -8,6 +8,8 @@ import {
   SolicitacaoCompra,
   buscarSolicitacao,
   cancelarSolicitacao,
+  concluirSolicitacao,
+  aguardandoConclusaoCliente,
   calcularProgressoPedido,
   obterPrevisaoEntrega,
   labelStatusPedido,
@@ -80,7 +82,8 @@ export function usePedidoAcompanhamento() {
   const { confirm } = useConfirmDialog();
   const [cancelando, setCancelando] = useState(false);
   // O comprador só cancela antes de o pedido sair para a entrega.
-  const podeCancelar = pedido?.status === 'recebido' || pedido?.status === 'preparando';
+  const podeCancelar =
+    pedido?.status === 'aguardando_liberacao' || pedido?.status === 'em_separacao';
 
   // Diálogo do próprio app: o Alert.alert com botões não aparece no navegador (Expo web).
   const confirmarCancelamento = useCallback(() => {
@@ -107,27 +110,66 @@ export function usePedidoAcompanhamento() {
     });
   }, [pedido, user?.empresa?.id, cancelando, confirm, carregarPedido]);
 
+  // Último passo: o cliente confirma que recebeu (ou retirou) quando o pedido chega até ele.
+  const [concluindo, setConcluindo] = useState(false);
+  const podeConcluir = !!pedido && aguardandoConclusaoCliente(pedido);
+
+  const confirmarConclusao = useCallback(() => {
+    if (!pedido || !user?.empresa?.id || concluindo) return;
+    const empresaId = user.empresa.id;
+    const pedidoId = pedido.id;
+    const ehRetirada = pedido.tipoEntrega === 'retirada';
+    confirm({
+      title: ehRetirada ? 'Concluir retirada' : 'Concluir entrega',
+      message: ehRetirada
+        ? `Confirma que retirou os produtos do pedido #${pedidoId}?`
+        : `Confirma que recebeu os produtos do pedido #${pedidoId}?`,
+      confirmText: 'Sim, concluir',
+      cancelText: 'Ainda não',
+      onConfirm: async () => {
+        setConcluindo(true);
+        try {
+          const atualizado = await concluirSolicitacao(pedidoId, empresaId);
+          setPedido(atualizado);
+          if (atualizado.status === 'entregue' && !entregueCreditadoRef.current) {
+            entregueCreditadoRef.current = true;
+            await refreshProdutos(); // os produtos entram no estoque do cliente
+          }
+        } catch (err) {
+          void carregarPedido(true);
+          throw err; // o diálogo mostra a mensagem de erro
+        } finally {
+          setConcluindo(false);
+        }
+      },
+    });
+  }, [pedido, user?.empresa?.id, concluindo, confirm, carregarPedido, refreshProdutos]);
+
   const etapas = pedido?.etapas?.length ? pedido.etapas : ETAPAS_PADRAO;
   const previsaoLabel = pedido ? obterPrevisaoEntrega(pedido) : '';
   const progresso = pedido ? calcularProgressoPedido(pedido) : 0.25;
   const entregue = pedido?.status === 'entregue';
-  const emRota = pedido?.status === 'em_rota';
+  const emRota = pedido?.status === 'em_rota' || pedido?.status === 'abastecendo';
+  const retirada = pedido?.tipoEntrega === 'retirada';
   const headerTitle = entregue ? 'Compra realizada' : 'Acompanhar pedido';
 
   const tituloHero = useMemo(() => {
     if (!pedido) return 'Acompanhar pedido';
     if (pedido.status === 'cancelada') return 'Pedido cancelado';
-    if (entregue) return 'Entrega concluída';
-    if (emRota) return 'Pedido a caminho';
-    return 'Preparando seu pedido';
-  }, [pedido, entregue, emRota]);
+    if (entregue) return retirada ? 'Retirada concluída' : 'Entrega concluída';
+    if (pedido.status === 'pronto_retirada') return 'Pronto para retirada';
+    if (pedido.status === 'abastecendo') return 'Abastecendo o carro';
+    if (pedido.status === 'em_rota') return 'Pedido a caminho';
+    if (pedido.status === 'em_separacao') return 'Separando seus produtos';
+    return 'Pedido recebido';
+  }, [pedido, entregue, retirada]);
 
   const subtituloHero = useMemo(() => {
     if (!pedido) return '';
     if (entregue) {
       return `Seus produtos de ${pedido.fornecedorNome} já estão no seu estoque.`;
     }
-    return labelStatusPedido(pedido.status);
+    return labelStatusPedido(pedido.status, pedido.tipoEntrega);
   }, [pedido, entregue]);
 
   const heroIcon = useMemo<{
@@ -163,5 +205,8 @@ export function usePedidoAcompanhamento() {
     podeCancelar,
     cancelando,
     confirmarCancelamento,
+    podeConcluir,
+    concluindo,
+    confirmarConclusao,
   };
 }
