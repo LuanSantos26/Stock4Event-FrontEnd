@@ -17,13 +17,85 @@ import { formatarPreco } from '../../services/productService';
 import { COMPANY_COLORS } from '../../theme/theme';
 import type { FinanceiroResumo } from '../../types/financeiro';
 import {
+  calcularEscala,
   calcularIndicadores,
   formatarValorCurto,
+  montarSerieBalanco,
   montarSerieMensal,
   type MetricaGrafico,
 } from '../../utils/graficosFinanceiro';
 
-const METRICAS: MetricaGrafico[] = ['Vendas', 'Compras', 'Lucro'];
+const METRICAS: MetricaGrafico[] = ['Vendas', 'Compras', 'Lucro', 'Lucro × Compras'];
+
+const COR_VENDAS = COMPANY_COLORS.primary;
+const COR_LUCRO = '#1B7A4A';
+const COR_NEGATIVO = '#C0392B';
+
+/** Altura total da área das barras; a linha do zero divide essa altura entre positivos e negativos. */
+const ALTURA_GRAFICO = 200;
+/** Espaço reservado para o rótulo de valor em cima (ou embaixo) de cada barra. */
+const ESPACO_ROTULO = 16;
+
+interface Barra {
+  valor: number;
+  altura: number;
+  cor: string;
+}
+
+/**
+ * Uma coluna do gráfico com o zero no meio: barras positivas sobem a partir da linha do zero,
+ * negativas descem. `fracao` é quanto da altura fica acima do zero.
+ */
+function ColunaDivergente({
+  label,
+  barras,
+  fracao,
+  mostrarValores,
+}: {
+  label: string;
+  barras: Barra[];
+  fracao: number;
+  /** Com duas barras por mês não cabe o valor em cima de cada uma. */
+  mostrarValores: boolean;
+}) {
+  const alturaUtil = ALTURA_GRAFICO - ESPACO_ROTULO * 2;
+  const acima = alturaUtil * fracao;
+  const abaixo = alturaUtil - acima;
+  return (
+    <View style={styles.barColumn}>
+      <View style={[styles.faixa, { height: acima + ESPACO_ROTULO, justifyContent: 'flex-end' }]}>
+        <View style={styles.barRow}>
+          {barras.map((b, i) => (
+            <View key={i} style={styles.barSlot}>
+              {b.valor > 0 ? (
+                <>
+                  {mostrarValores ? <Text style={styles.barValueLabel}>{formatarValorCurto(b.valor)}</Text> : null}
+                  <View style={[styles.bar, { backgroundColor: b.cor, height: Math.max((b.altura / 100) * acima, 3) }]} />
+                </>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={styles.zeroTick} />
+      <View style={[styles.faixa, { height: abaixo + ESPACO_ROTULO, justifyContent: 'flex-start' }]}>
+        <View style={[styles.barRow, { alignItems: 'flex-start' }]}>
+          {barras.map((b, i) => (
+            <View key={i} style={[styles.barSlot, { justifyContent: 'flex-start' }]}>
+              {b.valor < 0 ? (
+                <>
+                  <View style={[styles.bar, { backgroundColor: b.cor, height: Math.max((b.altura / 100) * abaixo, 3) }]} />
+                  {mostrarValores ? <Text style={styles.barValueLabel}>{formatarValorCurto(b.valor)}</Text> : null}
+                </>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      </View>
+      <Text style={styles.barLabel}>{label}</Text>
+    </View>
+  );
+}
 
 export function EmpresaGraficosScreen() {
   const [metrica, setMetrica] = useState<MetricaGrafico>('Vendas');
@@ -54,9 +126,39 @@ export function EmpresaGraficosScreen() {
     }, [carregar]),
   );
 
+  const balanco = metrica === 'Lucro × Compras';
   const dados = useMemo(() => montarSerieMensal(resumo, metrica), [resumo, metrica]);
+  const serieBalanco = useMemo(() => montarSerieBalanco(resumo), [resumo]);
   const indicadores = useMemo(() => calcularIndicadores(resumo), [resumo]);
-  const semDados = dados.every((item) => item.valor === 0);
+
+  // Cada coluna do gráfico: uma barra (Vendas, Compras, Lucro) ou duas (lucro e compras).
+  const colunas = useMemo(
+    () =>
+      balanco
+        ? serieBalanco.map((m) => ({
+            label: m.label,
+            barras: [
+              { valor: m.lucro, altura: m.alturaLucro, cor: m.lucro >= 0 ? COR_LUCRO : COR_NEGATIVO },
+              { valor: m.compras, altura: m.alturaCompras, cor: COR_NEGATIVO },
+            ],
+          }))
+        : dados.map((d) => ({
+            label: d.label,
+            barras: [
+              {
+                valor: d.valor,
+                altura: d.alturaPercentual,
+                cor: d.valor < 0 ? COR_NEGATIVO : metrica === 'Lucro' ? COR_LUCRO : COR_VENDAS,
+              },
+            ],
+          })),
+    [balanco, serieBalanco, dados, metrica],
+  );
+  const fracao = useMemo(
+    () => calcularEscala(colunas.flatMap((c) => c.barras.map((b) => b.valor))).fracaoPositiva,
+    [colunas],
+  );
+  const semDados = colunas.every((c) => c.barras.every((b) => b.valor === 0));
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -77,6 +179,8 @@ export function EmpresaGraficosScreen() {
             >
               <Text
                 style={[styles.segmentText, metrica === item && styles.segmentTextSelected]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
                 {item}
               </Text>
@@ -86,6 +190,21 @@ export function EmpresaGraficosScreen() {
 
         <View style={styles.chartCard}>
           <Text style={styles.sectionTitle}>{metrica} por mês</Text>
+          {metrica === 'Compras' ? (
+            <Text style={styles.chartHint}>Compras aparecem abaixo do zero: é o dinheiro que saiu.</Text>
+          ) : null}
+          {balanco ? (
+            <View style={styles.legenda}>
+              <View style={styles.legendaItem}>
+                <View style={[styles.legendaCor, { backgroundColor: COR_LUCRO }]} />
+                <Text style={styles.legendaTexto}>Lucro (acima do zero)</Text>
+              </View>
+              <View style={styles.legendaItem}>
+                <View style={[styles.legendaCor, { backgroundColor: COR_NEGATIVO }]} />
+                <Text style={styles.legendaTexto}>Compras (abaixo do zero)</Text>
+              </View>
+            </View>
+          ) : null}
 
           {carregando && !resumo ? (
             <View style={styles.stateBox}>
@@ -98,26 +217,28 @@ export function EmpresaGraficosScreen() {
                 <Text style={styles.retryText}>Tentar novamente</Text>
               </TouchableOpacity>
             </View>
-          ) : dados.length === 0 || semDados ? (
+          ) : colunas.length === 0 || semDados ? (
             <View style={styles.stateBox}>
               <Text style={styles.stateText}>Ainda não há {metrica.toLowerCase()} registradas no período.</Text>
             </View>
           ) : (
             <View style={styles.chartArea}>
-              {dados.map((item, index) => (
-                <View key={`${item.label}-${index}`} style={styles.barColumn}>
-                  <View style={styles.barValueLabelWrap}>
-                    <Text style={styles.barValueLabel}>{formatarValorCurto(item.valor)}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.bar,
-                      item.valor < 0 && styles.barNegativa,
-                      { height: `${Math.max(item.alturaPercentual, 4)}%` },
-                    ]}
-                  />
-                  <Text style={styles.barLabel}>{item.label}</Text>
-                </View>
+              {/* Linha do zero, na altura que separa positivos de negativos. */}
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.zeroLine,
+                  { top: ESPACO_ROTULO + (ALTURA_GRAFICO - ESPACO_ROTULO * 2) * fracao },
+                ]}
+              />
+              {colunas.map((c, index) => (
+                <ColunaDivergente
+                  key={`${c.label}-${index}`}
+                  label={c.label}
+                  barras={c.barras}
+                  fracao={fracao}
+                  mostrarValores={!balanco}
+                />
               ))}
             </View>
           )}
@@ -166,6 +287,7 @@ const styles = StyleSheet.create({
   segmentButton: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 4,
     paddingVertical: 10,
     borderRadius: 12,
   },
@@ -175,6 +297,7 @@ const styles = StyleSheet.create({
   segmentText: {
     color: '#666',
     fontWeight: '700',
+    fontSize: 12,
   },
   segmentTextSelected: {
     color: '#FFF',
@@ -198,38 +321,74 @@ const styles = StyleSheet.create({
     color: '#222',
     marginBottom: 14,
   },
+  chartHint: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: -8,
+    marginBottom: 10,
+  },
+  legenda: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginTop: -6,
+    marginBottom: 10,
+  },
+  legendaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendaCor: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+  },
+  legendaTexto: {
+    fontSize: 12,
+    color: '#555',
+  },
   chartArea: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 220,
-    borderTopWidth: 1,
-    borderTopColor: COMPANY_COLORS.primaryBorder,
-    paddingTop: 12,
+    position: 'relative',
+  },
+  zeroLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: '#B8B8B8',
   },
   barColumn: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: '100%',
   },
-  barValueLabelWrap: {
-    height: 24,
+  faixa: {
+    width: '100%',
+  },
+  barRow: {
+    flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'flex-end',
+    gap: 3,
+    flex: 1,
+  },
+  barSlot: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  zeroTick: {
+    height: 0,
   },
   barValueLabel: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#888',
+    marginVertical: 2,
   },
   bar: {
-    width: 22,
-    maxWidth: 32,
-    backgroundColor: COMPANY_COLORS.primary,
-    borderRadius: 10,
-    marginHorizontal: 4,
-  },
-  barNegativa: {
-    backgroundColor: '#C0392B',
+    width: 16,
+    borderRadius: 6,
   },
   stateBox: {
     height: 220,

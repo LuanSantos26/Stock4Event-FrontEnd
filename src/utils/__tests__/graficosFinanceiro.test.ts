@@ -1,5 +1,11 @@
 import type { FinanceiroResumo } from '../../types/financeiro';
-import { calcularIndicadores, formatarValorCurto, montarSerieMensal } from '../graficosFinanceiro';
+import {
+  calcularEscala,
+  calcularIndicadores,
+  formatarValorCurto,
+  montarSerieBalanco,
+  montarSerieMensal,
+} from '../graficosFinanceiro';
 
 function resumo(parcial: Partial<FinanceiroResumo> = {}): FinanceiroResumo {
   return {
@@ -38,12 +44,18 @@ describe('montarSerieMensal', () => {
       { label: 'Set', valor: 100, alturaPercentual: 33 },
       { label: 'Out', valor: 300, alturaPercentual: 100 },
     ]);
-    expect(montarSerieMensal(resumo(), 'Compras').map((b) => b.valor)).toEqual([150, 100]);
   });
 
-  it('lucro negativo usa o valor absoluto para a altura', () => {
+  it('compras ficam negativas, abaixo do zero', () => {
+    expect(montarSerieMensal(resumo(), 'Compras')).toEqual([
+      { label: 'Set', valor: -150, alturaPercentual: 100 },
+      { label: 'Out', valor: -100, alturaPercentual: 67 },
+    ]);
+  });
+
+  it('lucro positivo sobe e prejuízo desce, cada um na sua faixa', () => {
     expect(montarSerieMensal(resumo(), 'Lucro')).toEqual([
-      { label: 'Set', valor: -50, alturaPercentual: 25 },
+      { label: 'Set', valor: -50, alturaPercentual: 100 },
       { label: 'Out', valor: 200, alturaPercentual: 100 },
     ]);
   });
@@ -52,6 +64,31 @@ describe('montarSerieMensal', () => {
     expect(montarSerieMensal(null, 'Vendas')).toEqual([]);
     const zerado = resumo({ vendasMensais: [{ mes: '2026-10', label: 'Out', valor: 0 }] });
     expect(montarSerieMensal(zerado, 'Vendas')[0].alturaPercentual).toBe(0);
+  });
+});
+
+describe('calcularEscala', () => {
+  it('divide o gráfico na proporção dos maiores valores de cada lado', () => {
+    expect(calcularEscala([200, -50])).toEqual({ maiorPositivo: 200, maiorNegativo: 50, fracaoPositiva: 0.8 });
+  });
+
+  it('só positivos usa o gráfico todo para cima, só negativos todo para baixo', () => {
+    expect(calcularEscala([10, 30]).fracaoPositiva).toBe(1);
+    expect(calcularEscala([-10, -30]).fracaoPositiva).toBe(0);
+    expect(calcularEscala([]).fracaoPositiva).toBe(1);
+  });
+});
+
+describe('montarSerieBalanco', () => {
+  it('põe o lucro acima e as compras abaixo do zero, na mesma escala', () => {
+    expect(montarSerieBalanco(resumo())).toEqual([
+      { label: 'Set', lucro: -50, compras: -150, alturaLucro: 33, alturaCompras: 100 },
+      { label: 'Out', lucro: 200, compras: -100, alturaLucro: 100, alturaCompras: 67 },
+    ]);
+  });
+
+  it('sem resumo devolve vazio', () => {
+    expect(montarSerieBalanco(null)).toEqual([]);
   });
 });
 
